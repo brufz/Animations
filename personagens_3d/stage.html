@@ -8,9 +8,9 @@ window.setup=async(o)=>{
   r=new THREE.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true});r.setSize(o.w,o.h);r.setClearColor(0,0);
   r.shadowMap.enabled=true;r.shadowMap.type=THREE.PCFSoftShadowMap;r.toneMapping=THREE.ACESFilmicToneMapping;r.toneMappingExposure=o.exposure||1.05;r.outputColorSpace=THREE.SRGBColorSpace;r.domElement.style.transform="scaleX(-1)";document.body.appendChild(r.domElement);
   sc=new THREE.Scene();cam=new THREE.PerspectiveCamera(2*Math.atan(.5/o.span)*180/Math.PI,o.w/o.h,.05,200);cam.position.set(...o.camP);cam.lookAt(...o.camT);
-  sc.add(new THREE.HemisphereLight(0xe2efff,0x9a7058,1.7));
-  sun=new THREE.DirectionalLight(0xfff0dc,2.7);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-5,right:5,top:5,bottom:-5});sun.shadow.bias=-.0005;sun.shadow.radius=4;sc.add(sun);sc.add(sun.target);
-  const rim=new THREE.DirectionalLight(0xffe2c0,1.1);rim.position.set(2,3,8);sc.add(rim);
+  const lt=o.light||{};sc.add(new THREE.HemisphereLight(lt.sky??0xe2efff,lt.gnd??0x9a7058,lt.hemi??1.7));
+  sun=new THREE.DirectionalLight(lt.sunC??0xfff0dc,lt.sunI??2.7);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-5,right:5,top:5,bottom:-5});sun.shadow.bias=-.0005;sun.shadow.radius=4;sc.add(sun);sc.add(sun.target);
+  const rim=new THREE.DirectionalLight(lt.rimC??0xffe2c0,lt.rimI??1.1);rim.position.set(2,3,8);sc.add(rim);
   const g=new THREE.Mesh(new THREE.PlaneGeometry(60,60),new THREE.ShadowMaterial({opacity:.33}));g.rotation.x=-Math.PI/2;g.receiveShadow=true;sc.add(g);
   window._o=o;
   for(const a of o.actors){const X=await load(a.spec);X.obj.position.set(a.keys[0][1],X.obj.userData.y0,a.keys[0][2]);X.obj.rotation.y=a.rotY||0;sc.add(X.obj);X.a=a;A.push(X);}
@@ -22,8 +22,26 @@ window.frame=(t)=>{
     const lerp=(a,b)=>a+(b-a)*u;X.obj.position.x=lerp(k[1],n[1]);X.obj.position.z=lerp(k[2],n[2]);
     const ru=Math.min(1,(t-k[0])/0.35);X.obj.rotation.y=(i>0?K[i-1][3]:k[3])+(k[3]-(i>0?K[i-1][3]:k[3]))*Math.max(0,ru);
     const pk=i>0?K[i-1]:null;const w=pk&&pk[4]!==k[4]?Math.max(0,1-(t-k[0])/0.3):0;
-    if(w>0)pose(X,k[4],(t-k[0])+(k[5]||0),pk[4],(t-pk[0])+(pk[5]||0),w);else pose(X,k[4],(t-k[0])+(k[5]||0));}
+    if(w>0)pose(X,k[4],(t-k[0])+(k[5]||0),pk[4],(t-pk[0])+(pk[5]||0),w);else pose(X,k[4],(t-k[0])+(k[5]||0));X.obj.position.y=X.obj.userData.y0;fx(X,t);}
   const L=_o.Ldir;sun.target.position.set(0,0,-1);sun.position.set(L[0]*10,L[1]*10,L[2]*10-1);
   r.render(sc,cam);return 1};
+
+// ---- efeitos procedurais
+const _v=new THREE.Vector3(),_w=new THREE.Vector3(),_q=new THREE.Quaternion(),_p=new THREE.Quaternion();
+function bone(X,n){if(!X._b){X._b={};X.obj.traverse(o=>{if(o.isBone)X._b[o.name.replace(/^mixamorig:?/,'')]=o})}return X._b[n]}
+function aim(b,c,dirW,w){X0.obj.updateMatrixWorld(true);b.getWorldPosition(_v);c.getWorldPosition(_w);const cur=_w.sub(_v).normalize();
+  const q=new THREE.Quaternion().setFromUnitVectors(cur,dirW.clone().normalize());q.slerp(new THREE.Quaternion(),1-w);
+  const wq=b.getWorldQuaternion(new THREE.Quaternion());const nw=q.multiply(wq);b.parent.getWorldQuaternion(_p);b.quaternion.copy(_p.invert().multiply(nw));}
+let X0;
+function inWin(t,W){if(!W)return null;for(const w of W)if(t>=w[0]-0.35&&t<=w[1]+0.35)return [w,Math.min(1,(t-w[0]+0.35)/0.35,(w[1]+0.35-t)/0.35)];return null}
+function fx(X,t){X0=X;const F=X.a.fx||{};const ry=X.obj.rotation.y;const loc=(x,y,z)=>new THREE.Vector3(x,y,z).applyAxisAngle(new THREE.Vector3(0,1,0),ry);
+  const W=inWin(t,F.wave);if(W){const [w,k]=W;const sides=w[2]==='both'?['Right','Left']:[w[2]||'Right'];const ex=w[2]==='both';
+    for(const sd of sides){const sg=sd==='Right'?-1:1;const A=bone(X,sd+'Arm'),FA=bone(X,sd+'ForeArm'),H=bone(X,sd+'Hand');if(!A)continue;
+      const ph=Math.sin(t*(ex?7:9)+(sd==='Left'?1.3:0));
+      aim(A,FA,loc(sg*(ex?.55:.62),ex?.85:.62,.12),k);aim(FA,H,loc(sg*(.12+.28*ph),1,.18),k);}}
+  const H=inWin(t,F.hop);if(H){const [w,k]=H;const ph=Math.abs(Math.sin((t-w[0])*Math.PI*(w[3]||2.4)));X.obj.position.y+=k*(w[2]||.1)*ph;}
+  // rosto (morph targets de quem tiver)
+  let mo=0;const T=inWin(t,F.talk);if(T){const n=Math.sin(t*23)*.5+Math.sin(t*14.3)*.5;mo=T[1]*Math.max(0,n)*.75;}
+  X.obj.traverse(o=>{if(o.morphTargetDictionary){const d=o.morphTargetDictionary;if(d.mouthOpen!==undefined)o.morphTargetInfluences[d.mouthOpen]=mo;if(d.mouthSmile!==undefined)o.morphTargetInfluences[d.mouthSmile]=F.smile||0;}});}
 window.ok=1;
 </script></body></html>

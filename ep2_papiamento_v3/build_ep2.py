@@ -2,7 +2,7 @@
 import json, os
 from PIL import Image, ImageFilter
 D = '/home/claude/holanda'; A = f'{D}/ep2'
-MAN = json.load(open(f'{A}/manifest.json')); TM = json.load(open(f'{D}/papi_timing.json'))
+MAN = json.load(open(f'{A}/manifest.json')); ACT = json.load(open(f'{A}/act/act.json')) if os.path.exists(f'{A}/act/act.json') else {}; TM = json.load(open(f'{D}/papi_timing.json'))
 # cópias desfocadas dos mapas (efeito miniatura nas bordas)
 for k in ['mapa_caribe', 'mapa_atlantico']:
     if not os.path.exists(f'{A}/{k}_blur.jpg'):
@@ -34,7 +34,7 @@ html,body{margin:0;background:#000;width:1080px;height:1920px;overflow:hidden}
 #hudNum{font-weight:900;font-size:170px;line-height:1;margin-top:18px;-webkit-text-stroke:14px #14110f;paint-order:stroke fill;text-shadow:0 10px 20px rgba(0,0,0,.4)}
 """
 JS = r"""
-const MAN=__MAN__;const LINES=__LINES__;const PB=__PB__;
+const MAN=__MAN__;const ACT=__ACT__;const LINES=__LINES__;const PB=__PB__;
 const A='file:///home/claude/holanda/ep2/';const M=110;
 const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));const prog=(t,a,b)=>clamp((t-a)/(b-a),0,1);
 const ease=x=>x<.5?2*x*x:1-Math.pow(-2*x+2,2)/2;const eout=x=>1-Math.pow(1-x,3);
@@ -65,9 +65,11 @@ function homog(w,h,q){const [x0,y0]=q[0],[x1,y1]=q[1],[x2,y2]=q[2],[x3,y3]=q[3];
 """
 SCENES_JS = r"""
 const P=MAN.park,C=MAN.cais,SL=MAN.sala,CB=MAN.caribe,AT=MAN.atl;
-function parkScene(t0,t1,tag,spr,camKeys,upd,warm){return scene(t0,t1,S=>{const L=P.layers[tag];
+function actors(S,D){S.act=D.actors.map(a=>{const it=img(S,a.frames[0],a.x-M,a.y,a.par,a.blur?{filter:`blur(${a.blur}px)`}:{});it.fr=a.frames;it.k=0;return it})}
+function actorsAt(S,D,T){const i0=Math.round((T-D.t0)*30);S.act.forEach(it=>{const i=clamp(i0,0,it.fr.length-1);if(i!==it.k){it.k=i;it.e.src=A+it.fr[i]}})}
+function parkScene(t0,t1,tag,spr,camKeys,upd,warm){const D=ACT[tag];if(D)upd=(S,t,T)=>actorsAt(S,D,T);return scene(t0,t1,S=>{const L=P.layers[tag];
   layer(S,L.sky);S.wh=frames(S,L.wheel.frames,-M,0,L.wheel.par);layer(S,L.far);layer(S,L.near);
-  S.g={};spr.forEach(([k,ex])=>{S.g[k]=sprite(S,P.sprites[tag][k],ex||{})});layer(S,L.fg);
+  S.g={};if(D)actors(S,D);else spr.forEach(([k,ex])=>{S.g[k]=sprite(S,P.sprites[tag][k],ex||{})});layer(S,L.fg);
   if(warm)S.el.style.filter='saturate(1.08) contrast(1.03)';
 },(S,t,T)=>{upd(S,t,T);placeAll(S,kf(t,camKeys));S.wh.set(Math.floor(T*7.6)%16)})}
 // 0a GANCHO — só o parque (plano de abertura)
@@ -160,7 +162,7 @@ window.SCENE_BOUNDS=SCENES.map(s=>[s.t0,s.t1]);window.DURATION=PB[9][1];
 bounds = TM['bounds']
 html = f"""<!DOCTYPE html><html><head><meta charset="utf-8"><style>{CSS}</style></head><body>
 <div id="ov" style="position:absolute;inset:0;z-index:10;pointer-events:none"><div id="vig"></div><div id="grain"></div><div id="hud"><div id="hudTag"></div><div id="hudNum"></div></div><div id="cap"></div><div id="fade"></div></div>
-<script>{JS.replace('__MAN__', json.dumps(MAN, ensure_ascii=False)).replace('__LINES__', json.dumps(TM['lines'], ensure_ascii=False)).replace('__PB__', json.dumps(bounds))}
+<script>{JS.replace('__MAN__', json.dumps(MAN, ensure_ascii=False)).replace('__LINES__', json.dumps(TM['lines'], ensure_ascii=False)).replace('__PB__', json.dumps(bounds)).replace('__ACT__', json.dumps(ACT))}
 {SCENES_JS}
 {TAIL}</script></body></html>"""
 open(f'{D}/ep2.html', 'w').write(html); print('ok', bounds[-1])

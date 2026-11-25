@@ -14,6 +14,7 @@ def page(p):
     return b, pg
 def shot(pg, T, path=None):
     pg.evaluate(f"setT({T})")
+    pg.evaluate("Promise.all([...document.images].filter(i=>i.style.visibility!=='hidden'&&!i.complete).map(i=>i.decode().catch(()=>0)))")
     return pg.screenshot(type="jpeg", quality=92, path=path)
 if __name__ == "__main__":
     mode = sys.argv[1]
