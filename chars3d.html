@@ -1,0 +1,191 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:transparent}canvas{display:block}</style></head><body><canvas id="c" width="300" height="500"></canvas><script>
+const VS=`#version 300 es
+in vec2 p;void main(){gl_Position=vec4(p,0,1);}`;
+const FS=`#version 300 es
+precision highp float;
+uniform vec2 R;uniform float T;uniform float yaw;uniform float wave;uniform int K;
+uniform vec3 cShirt,cPants,cSkin,cHair,cHat;uniform float hatT,skirt,pose,smile,span,cy,cx;
+out vec4 o;
+float sdCap(vec3 p,vec3 a,vec3 b,float r){vec3 pa=p-a,ba=b-a;float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.);return length(pa-ba*h)-r;}
+float sdSph(vec3 p,vec3 c,float r){return length(p-c)-r;}
+float sdEll(vec3 p,vec3 c,vec3 r){p-=c;float k0=length(p/r),k1=length(p/(r*r));return k0*(k0-1.)/k1;}
+float sdCyl(vec3 p,vec3 c,float h,float r){p-=c;vec2 d=abs(vec2(length(p.xz),p.y))-vec2(r,h);return min(max(d.x,d.y),0.)+length(max(d,0.))-0.01;}
+float sdRBox(vec3 p,vec3 c,vec3 b,float r){vec3 q=abs(p-c)-b;return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.)-r;}
+float smin(float a,float b,float k){float h=clamp(.5+.5*(b-a)/k,0.,1.);return mix(b,a,h)-k*h*(1.-h);}
+vec2 U(vec2 a,vec2 b){return a.x<b.x?a:b;}
+mat2 rot(float a){float c=cos(a),s=sin(a);return mat2(c,-s,s,c);}
+// materiais: 1 pele 2 casaco 3 faixa laranja 4 chapéu 5 cabelo 6 renda 7 bota 8 calça 9 olho 10 chão 11 pena 12 botão
+vec2 nassau(vec3 p){
+  
+  vec2 r=vec2(1e3,0.);
+  // pernas
+  r=U(r,vec2(min(sdCap(p,vec3(-.16,.25,0),vec3(-.16,.75,0),.12),sdCap(p,vec3(.16,.25,0),vec3(.16,.75,0),.12)),58.));
+  r=U(r,vec2(min(sdRBox(p,vec3(-.17,.14,.04),vec3(.13,.14,.17),.04),sdRBox(p,vec3(.17,.14,.04),vec3(.13,.14,.17),.04)),57.));
+  // tronco (casaco) - cápsula larga
+  float torso=smin(sdEll(p,vec3(0,1.15,0),vec3(.42,.5,.3)),sdEll(p,vec3(0,.85,0),vec3(.4,.32,.3)),.1);
+  r=U(r,vec2(torso,52.));
+  // faixa laranja diagonal
+  vec3 q=p-vec3(0,1.1,0);q.xy*=rot(-.75);
+  float sash=max(abs(q.y)-.07,torso-.03);
+  r=U(r,vec2(sash,53.));
+  // botões
+  float bt=1e3;for(int i=0;i<4;i++){bt=min(bt,sdSph(p,vec3(.05,.8+float(i)*.16,-.3+.02*float(i)),.03));}
+  r=U(r,vec2(bt,62.));
+  // braços (um acenando)
+  float ang=.6+.35*sin(T*6.)*wave;
+  vec3 sh=vec3(.4,1.45,0);vec3 el=sh+vec3(.2,.18*ang+.1,-.05);vec3 hd=el+vec3(.08,.35*ang,-.05);
+  float arm=min(sdCap(p,sh,el,.1),sdCap(p,el,hd,.09));
+  arm=min(arm,sdCap(p,vec3(-.4,1.45,0),vec3(-.5,1.0,.02),.1));arm=min(arm,sdCap(p,vec3(-.5,1.0,.02),vec3(-.48,.65,-.02),.09));
+  r=U(r,vec2(arm,52.));
+  r=U(r,vec2(min(sdSph(p,hd+vec3(0,.06,0),.1),sdSph(p,vec3(-.48,.58,-.02),.1)),51.));
+  // gola de renda
+  r=U(r,vec2(sdEll(p,vec3(0,1.6,0),vec3(.36,.08,.28)),56.));
+  // cabeça
+  float head=sdEll(p,vec3(0,1.95,0),vec3(.33,.36,.32));
+  r=U(r,vec2(head,51.));
+  // nariz
+  r=U(r,vec2(sdEll(p,vec3(0,1.9,-.33),vec3(.05,.07,.05)),51.));
+  // cabelo longo (atrás e laterais)
+  float hair=smin(sdEll(p,vec3(0,1.9,.06),vec3(.38,.4,.32)),sdEll(p,vec3(0,1.65,.12),vec3(.4,.25,.25)),.1);
+  hair=max(hair,-(p.z+.12));hair=max(hair,-sdEll(p,vec3(0,1.93,-.2),vec3(.3,.32,.3)));
+  r=U(r,vec2(hair,55.));
+  // bigode e cavanhaque
+  r=U(r,vec2(min(sdCap(p,vec3(-.11,1.81,-.3),vec3(.11,1.81,-.3),.035),sdEll(p,vec3(0,1.7,-.29),vec3(.05,.08,.04))),55.));
+  // olhos
+  r=U(r,vec2(min(sdEll(p,vec3(-.11,1.98,-.29),vec3(.04,.055,.03)),sdEll(p,vec3(.11,1.98,-.29),vec3(.04,.055,.03))),59.));
+  // sobrancelhas
+  r=U(r,vec2(min(sdCap(p,vec3(-.17,2.08,-.28),vec3(-.05,2.09,-.3),.02),sdCap(p,vec3(.05,2.09,-.3),vec3(.17,2.08,-.28),.02)),55.));
+  // chapéu: aba + copa + fita
+  r=U(r,vec2(sdCyl(p,vec3(0,2.22,0),.025,.62),54.));
+  r=U(r,vec2(smin(sdCyl(p,vec3(0,2.36,0),.13,.3),sdSph(p,vec3(0,2.45,0),.28),.08),54.));
+  r=U(r,vec2(sdCyl(p,vec3(0,2.29,0),.05,.315),53.));
+  // pena
+  vec3 f=p-vec3(.22,2.55,.05);f.xy*=rot(-.7);
+  r=U(r,vec2(sdEll(f,vec3(0),vec3(.06,.3,.03)),61.));
+  return r;
+}
+
+// materiais: 1 pele 2 camisa 3 calça 4 sapato 5 cabelo 6 olho 7 chapéu 8 boca 9 madeira 10 chão 11 metal 12 branco 13 laranja 14 boi 15 chifre 16 focinho 17 couro 18 paleta
+vec3 armPos(float side,float up,out vec3 el){
+  vec3 sh=vec3(.19*side,.76,0.);
+  vec3 hd=mix(vec3(.25*side,.42,-.03),vec3(.33*side,1.12,-.06),up);
+  el=mix(sh,hd,.5)+vec3(.07*side,-.04*(1.-up),-.03);
+  return hd;
+}
+vec2 human(vec3 p,int kind){
+  vec2 r=vec2(1e3,0.);
+  bool player=kind==4;
+  // sapatos
+  r=U(r,vec2(min(sdRBox(p,vec3(-.085,.035,-.02),vec3(.055,.03,.09),.02),sdRBox(p,vec3(.085,.035,-.02),vec3(.055,.03,.09),.02)),4.));
+  float legs=min(sdCap(p,vec3(-.085,.07,0),vec3(-.085,.36,0),.058),sdCap(p,vec3(.085,.07,0),vec3(.085,.36,0),.058));
+  if(player){r=U(r,vec2(max(legs,p.y-.2),13.));r=U(r,vec2(max(legs,.2-p.y),1.));r=U(r,vec2(sdEll(p,vec3(0,.38,0),vec3(.18,.1,.14)),3.));}
+  else r=U(r,vec2(legs,3.));
+  if(skirt>.5)r=U(r,vec2(smin(sdEll(p,vec3(0,.3,0),vec3(.21,.17,.17)),sdEll(p,vec3(0,.44,0),vec3(.17,.12,.14)),.05),3.));
+  // tronco
+  float torso=sdEll(p,vec3(0,.6,0),vec3(.2,.25,.15));
+  if(kind==2)torso=smin(torso,sdEll(p,vec3(0,.42,0),vec3(.21,.2,.16)),.06);
+  r=U(r,vec2(torso,2.));
+  if(kind==2){vec3 q=p-vec3(0,.6,0);q.xy*=rot(-.8);r=U(r,vec2(max(abs(q.y)-.035,torso-.018),13.));}
+  if(player){r=U(r,vec2(sdEll(p,vec3(0,.83,-.02),vec3(.1,.035,.09)),12.));}
+  // braços
+  vec3 el,elL;float upR=pose,upL=pose;
+  if(kind==3){upR=.35;upL=.15;}
+  if(kind==2){upR=.1;upL=0.;}
+  vec3 hR=armPos(1.,upR,el),hL=armPos(-1.,upL,elL);
+  if(kind==3){hR=vec3(.27,.78,-.28);el=vec3(.27,.66,-.1);hL=vec3(-.3,.6,-.16);elL=vec3(-.28,.58,-.02);}
+  float arms=min(min(sdCap(p,vec3(.19,.76,0),el,.052),sdCap(p,el,hR,.047)),min(sdCap(p,vec3(-.19,.76,0),elL,.052),sdCap(p,elL,hL,.047)));
+  r=U(r,vec2(arms,2.));
+  r=U(r,vec2(min(sdSph(p,hR,.055),sdSph(p,hL,.055)),1.));
+  // cabeça
+  r=U(r,vec2(sdCap(p,vec3(0,.82,0),vec3(0,.88,0),.06),1.));
+  float head=sdEll(p,vec3(0,1.,0),vec3(.19,.205,.18));
+  head=min(head,min(sdSph(p,vec3(-.185,1.0,0),.035),sdSph(p,vec3(.185,1.0,0),.035)));
+  r=U(r,vec2(head,1.));
+  r=U(r,vec2(sdEll(p,vec3(0,.975,-.18),vec3(.032,.04,.03)),1.));
+  r=U(r,vec2(min(sdEll(p,vec3(-.068,1.025,-.158),vec3(.022,.031,.015)),sdEll(p,vec3(.068,1.025,-.158),vec3(.022,.031,.015))),6.));
+  r=U(r,vec2(min(sdCap(p,vec3(-.1,1.085,-.155),vec3(-.035,1.09,-.168),.012),sdCap(p,vec3(.035,1.09,-.168),vec3(.1,1.085,-.155),.012)),5.));
+  if(smile>.5)r=U(r,vec2(sdEll(p,vec3(0,.915,-.162),vec3(.045,.028,.02)),8.));
+  else r=U(r,vec2(sdCap(p,vec3(-.035,.92,-.168),vec3(.035,.92,-.168),.01),8.));
+  // cabelo / chapéu / lenço
+  float hair=sdEll(p,vec3(0,1.04,.025),vec3(.205,.19,.2));
+  hair=max(hair,-sdEll(p,vec3(0,.98,-.1),vec3(.2,.18,.18)));
+  hair=max(hair,.9-p.y);
+  if(skirt>.5)hair=min(hair,sdEll(p,vec3(0,.92,.07),vec3(.2,.22,.13)));
+  if(hatT>1.5){hair=sdEll(p,vec3(0,1.05,.02),vec3(.215,.2,.205));hair=max(hair,-sdEll(p,vec3(0,.97,-.12),vec3(.2,.19,.17)));r=U(r,vec2(hair,13.5));}
+  else r=U(r,vec2(hair,5.));
+  if(hatT>.5&&hatT<1.5){r=U(r,vec2(sdCyl(p,vec3(0,1.16,0),.012,.3),7.));r=U(r,vec2(smin(sdCyl(p,vec3(0,1.24,0),.08,.15),sdSph(p,vec3(0,1.29,0),.14),.04),7.));}
+  if(kind==3){vec3 q=p-vec3(.03,1.17,0);q.xy*=rot(-.25);r=U(r,vec2(sdEll(q,vec3(0),vec3(.22,.06,.21)),7.));
+    r=U(r,vec2(sdCap(p,hR,hR+vec3(.07,.12,-.12),.012),9.));r=U(r,vec2(sdSph(p,hR+vec3(.08,.14,-.14),.02),13.));
+    vec3 pq=p-(hL+vec3(-.02,.02,-.04));pq.xy*=rot(.3);r=U(r,vec2(sdEll(pq,vec3(0),vec3(.14,.012,.11)),18.));}
+  if(kind==2){r=U(r,vec2(sdCap(p,vec3(.3,0.,-.08),vec3(.3,1.85,-.08),.017),9.));r=U(r,vec2(sdEll(p,vec3(.3,1.92,-.08),vec3(.03,.09,.03)),11.));}
+  return r;
+}
+vec2 ox(vec3 p){
+  vec2 r=vec2(1e3,0.);
+  float body=sdEll(p,vec3(0,.78,0),vec3(.72,.4,.36));
+  r=U(r,vec2(body,14.));
+  for(int i=0;i<4;i++){float sx=i<2?-.42:.42;float sz=(i%2==0)?-.2:.2;r=U(r,vec2(sdCap(p,vec3(sx,.55,sz),vec3(sx+.04*sin(T*4.+float(i)),.12,sz),.11),14.));r=U(r,vec2(sdSph(p,vec3(sx+.04*sin(T*4.+float(i)),.08,sz),.1),17.));}
+  float head=sdEll(p,vec3(.86,.9,0),vec3(.27,.24,.22));r=U(r,vec2(head,14.));
+  r=U(r,vec2(sdEll(p,vec3(1.08,.82,0),vec3(.13,.13,.16)),16.));
+  r=U(r,vec2(min(sdCap(p,vec3(.82,1.08,-.14),vec3(.92,1.26,-.3),.035),sdCap(p,vec3(.82,1.08,.14),vec3(.92,1.26,.3),.035)),15.));
+  r=U(r,vec2(min(sdEll(p,vec3(.75,1.04,-.2),vec3(.1,.05,.04)),sdEll(p,vec3(.75,1.04,.2),vec3(.1,.05,.04))),14.));
+  r=U(r,vec2(min(sdEll(p,vec3(.98,.96,-.16),vec3(.035,.045,.03)),sdEll(p,vec3(.98,.96,.16),vec3(.035,.045,.03))),6.));
+  r=U(r,vec2(sdCap(p,vec3(-.7,.9,0),vec3(-.85,.45,0),.03),14.));
+  float bd2=sdEll(p,vec3(0,.78,0),vec3(.75,.43,.39));r=U(r,vec2(max(bd2,abs(abs(p.x)-.3)-.04),17.));
+  r=U(r,vec2(min(sdCap(p,vec3(-.3,1.2,0),vec3(-.3,3.,0),.02),sdCap(p,vec3(.3,1.2,0),vec3(.3,3.,0),.02)),9.));
+  return r;
+}
+vec2 map(vec3 p){
+  p.xz*=rot(yaw);
+  if(K==0)return nassau(p);
+  if(K==5)return ox(p);
+  return human(p,K);
+}
+vec3 nor(vec3 p){vec2 e=vec2(.0012,0);return normalize(vec3(map(p+e.xyy).x-map(p-e.xyy).x,map(p+e.yxy).x-map(p-e.yxy).x,map(p+e.yyx).x-map(p-e.yyx).x));}
+float ao(vec3 p,vec3 n){float o=0.,s=1.;for(int i=1;i<6;i++){float h=.025*float(i);o+=(h-map(p+n*h).x)*s;s*=.6;}return clamp(1.-3.*o,0.,1.);}
+float shadow(vec3 ro,vec3 rd){float res=1.,t=.015;for(int i=0;i<48;i++){float h=map(ro+rd*t).x;res=min(res,6.*h/t);t+=clamp(h,.015,.15);if(res<.002||t>4.)break;}return clamp(res,0.,1.);}
+vec3 mcol(float m,vec3 p){
+  if(m>=50.){float n=m-50.;
+    if(n<1.5)return vec3(.91,.70,.53);if(n<2.5)return vec3(.16,.2,.33);if(n<3.5)return vec3(.95,.52,.13);if(n<4.5)return vec3(.1,.1,.12);
+    if(n<5.5)return vec3(.33,.21,.12);if(n<6.5)return vec3(.97,.95,.9);if(n<7.5)return vec3(.08,.07,.07);if(n<8.5)return vec3(.25,.18,.14);
+    if(n<9.5)return vec3(.03);if(n<11.5)return vec3(.98,.97,.94);return vec3(.9,.75,.4);}
+  if(m<1.5)return cSkin;if(m<2.5)return cShirt;if(m<3.5)return cPants;if(m<4.5)return vec3(.12,.09,.08);if(m<5.5)return cHair;
+  if(m<6.5)return vec3(.03);if(m<7.5)return cHat;if(m<8.5)return vec3(.45,.12,.1);if(m<9.5)return vec3(.45,.3,.17);if(m<11.5)return vec3(.75,.75,.78);
+  if(m<12.5)return vec3(.96,.95,.92);if(m<13.25)return vec3(.95,.52,.13);if(m<13.75)return cHat;
+  if(m<14.5){float pt=smoothstep(.02,0.,length((p.xy-vec2(-.15,.82))*vec2(1.,1.4))-.25);return mix(vec3(.55,.35,.22),vec3(.95,.92,.86),pt);}
+  if(m<15.5)return vec3(.95,.9,.78);if(m<16.5)return vec3(.88,.6,.55);if(m<17.5)return vec3(.62,.44,.25);return vec3(.75,.6,.4);
+}
+void main(){
+  vec2 uv=(gl_FragCoord.xy-.5*R)/R.y;
+  float dist=7.;
+  vec3 ta=vec3(cx,cy,0.),ro=ta+vec3(0,.25,-dist);
+  vec3 ww=normalize(ta-ro),uu=normalize(cross(vec3(0,1,0),ww)),vv=cross(ww,uu);
+  vec3 rd=normalize(uv.x*uu+uv.y*vv+(dist/span)*ww);
+  float t=0.;vec2 h;for(int i=0;i<160;i++){h=map(ro+rd*t);if(h.x<.0005||t>14.)break;t+=h.x*.9;}
+  vec3 L=normalize(vec3(-.45,.75,-.6));
+  if(t>14.){
+    if(rd.y<0.){float tg=-ro.y/rd.y;vec3 pg=ro+rd*tg;float s=shadow(pg+vec3(0,.01,0),L);float a=ao(pg,vec3(0,1,0));float d=1.-s*a;o=vec4(.08,.05,.03,d*.55*smoothstep(1.6,.2,length(pg.xz)));return;}
+    o=vec4(0);return;}
+  vec3 p=ro+rd*t,n=nor(p);
+  vec3 c=mcol(h.y,(vec4(p,1.)).xyz);
+  float dif=clamp(dot(n,L),0.,1.)*shadow(p+n*.01,L);
+  float a=ao(p,n);float sky=.5+.5*n.y;float rim=pow(1.-clamp(dot(n,-rd),0.,1.),3.);
+  float fil=clamp(dot(n,normalize(vec3(.4,.2,-1.))),0.,1.);
+  vec3 lin=vec3(1.,.92,.8)*dif*1.1+vec3(.55,.62,.82)*sky*.5*a+vec3(1.,.88,.75)*fil*.45*a+vec3(1.,.85,.65)*rim*.45*a;
+  vec3 res=c*lin;
+  if(abs(h.y-6.)<.5||abs(h.y-59.)<.5)res+=vec3(.7)*pow(clamp(dot(reflect(rd,n),L),0.,1.),24.);
+  res=pow(res,vec3(.88));
+  o=vec4(res,1);
+}`;
+const c=document.getElementById('c');const gl=c.getContext('webgl2',{premultipliedAlpha:false,preserveDrawingBuffer:true,alpha:true});
+function sh(t,s){const x=gl.createShader(t);gl.shaderSource(x,s);gl.compileShader(x);if(!gl.getShaderParameter(x,gl.COMPILE_STATUS))throw gl.getShaderInfoLog(x);return x}
+const pr=gl.createProgram();gl.attachShader(pr,sh(gl.VERTEX_SHADER,VS));gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(pr);gl.useProgram(pr);
+const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+const l=gl.getAttribLocation(pr,'p');gl.enableVertexAttribArray(l);gl.vertexAttribPointer(l,2,gl.FLOAT,false,0,0);
+const U=n=>gl.getUniformLocation(pr,n);
+window.draw=(o)=>{c.width=o.w;c.height=o.h;gl.viewport(0,0,o.w,o.h);
+ gl.uniform2f(U('R'),o.w,o.h);gl.uniform1f(U('T'),o.T||0);gl.uniform1f(U('yaw'),o.yaw||0);gl.uniform1f(U('wave'),o.wave??1);gl.uniform1i(U('K'),o.K);
+ for(const k of ['cShirt','cPants','cSkin','cHair','cHat'])gl.uniform3fv(U(k),o[k]||[.5,.5,.5]);
+ for(const k of ['hatT','skirt','pose','smile','span','cy','cx'])gl.uniform1f(U(k),o[k]||0);
+ gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);gl.drawArrays(gl.TRIANGLES,0,3);gl.finish();return 1};
+</script></body></html>

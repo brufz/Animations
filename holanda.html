@@ -1,0 +1,645 @@
+<!DOCTYPE html>
+<html><head><meta charset="utf-8">
+<style>
+@font-face{font-family:RB;src:url('file:///usr/share/fonts/truetype/google-fonts/ofl/roboto/Roboto[wdth,wght].ttf');font-weight:100 900;font-stretch:75% 100%}
+html,body{margin:0;padding:0;background:#000;overflow:hidden}
+#stage{position:absolute;left:0;top:0;width:1080px;height:1920px;overflow:hidden;perspective:1600px;perspective-origin:540px 960px;background:#000}
+.world{position:absolute;left:0;top:0;width:1080px;height:1920px;transform-style:preserve-3d;transform-origin:0 0}
+.pl{position:absolute;left:0;top:0;transform-origin:0 0;backface-visibility:hidden}
+.pl svg{display:block}
+#ov{position:absolute;left:0;top:0;width:1080px;height:1920px;pointer-events:none}
+#vig{position:absolute;inset:0;background:radial-gradient(ellipse 75% 62% at 50% 48%,rgba(0,0,0,0) 55%,rgba(10,5,0,.55) 100%)}
+#grain{position:absolute;inset:0;background:url('noise.png');opacity:.10;mix-blend-mode:overlay}
+#flash{position:absolute;inset:0;background:#fff7e6;opacity:0}
+#cap{position:absolute;left:90px;right:90px;top:1440px;text-align:center;font-family:RB;font-weight:800;font-stretch:88%;font-size:74px;line-height:1.12;color:#fff;letter-spacing:.2px}
+#cap span{display:inline;-webkit-text-stroke:7px rgba(12,10,8,.92);paint-order:stroke fill;text-shadow:0 4px 14px rgba(0,0,0,.55)}
+#cap span.h{color:#ffd043;text-transform:uppercase;font-weight:900}
+#cap span.r{color:#ff7a5c;text-transform:uppercase;font-weight:900}
+#hud{position:absolute;left:0;right:0;top:250px;text-align:center;font-family:RB;font-stretch:75%;color:#fff}
+#hudTag{display:inline-block;font-weight:900;font-size:46px;letter-spacing:4px;padding:10px 28px;border-radius:16px;background:#ffc531;color:#1b1510;border:5px solid #1b1510;box-shadow:0 8px 0 #1b1510}
+#hudNum{font-weight:900;font-size:170px;line-height:1;margin-top:18px;-webkit-text-stroke:14px #14110f;paint-order:stroke fill;text-shadow:0 10px 20px rgba(0,0,0,.4)}
+#hudNum small{font-size:70px;margin-left:12px}
+#defs{position:absolute;width:0;height:0}
+</style></head>
+<body>
+<svg id="defs" width="0" height="0"><defs>
+ <linearGradient id="glass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#9fb9c9"/><stop offset=".45" stop-color="#4d6478"/><stop offset="1" stop-color="#2c3a4a"/></linearGradient>
+ <linearGradient id="glassLit" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe2a0"/><stop offset="1" stop-color="#f29a3e"/></linearGradient>
+ <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff0a8"/><stop offset=".35" stop-color="#f6c443"/><stop offset="1" stop-color="#b9781a"/></linearGradient>
+ <linearGradient id="goldSide" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#c98a20"/><stop offset="1" stop-color="#8f5a10"/></linearGradient>
+ <linearGradient id="brass" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f3d28a"/><stop offset=".5" stop-color="#c8963f"/><stop offset="1" stop-color="#7d5620"/></linearGradient>
+ <linearGradient id="ocean" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2f6f8e"/><stop offset="1" stop-color="#15405e"/></linearGradient>
+ <radialGradient id="glow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fff3d0" stop-opacity=".95"/><stop offset=".35" stop-color="#ffd38a" stop-opacity=".45"/><stop offset="1" stop-color="#ffb060" stop-opacity="0"/></radialGradient>
+ <radialGradient id="lamp" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#ffe6a0" stop-opacity=".9"/><stop offset="1" stop-color="#ff9a30" stop-opacity="0"/></radialGradient>
+ <filter id="soft"><feGaussianBlur stdDeviation="6"/></filter>
+</defs></svg>
+<div id="stage"></div>
+<div id="ov"><div id="vig"></div><div id="grain"></div><div id="flash"></div>
+ <div id="hud"><div id="hudTag"></div><div id="hudNum"></div></div>
+ <div id="cap"></div>
+</div>
+<script>
+const W=1080,H=1920,P=1600;
+// ---------- util
+const clamp=(x,a=0,b=1)=>Math.max(a,Math.min(b,x));
+const lerp=(a,b,t)=>a+(b-a)*t;
+const prog=(t,a,b)=>clamp((t-a)/(b-a));
+const eio=x=>x<.5?4*x*x*x:1-Math.pow(-2*x+2,3)/2;
+const eout=x=>1-Math.pow(1-x,3);
+const ein=x=>x*x*x;
+const eback=(x,s=1.8)=>{x-=1;return x*x*((s+1)*x+s)+1};
+function kf(t,keys,ease=eio){ // keys [[t,v],...]
+  if(t<=keys[0][0])return keys[0][1];
+  for(let i=1;i<keys.length;i++){if(t<=keys[i][0]){const[a,va]=keys[i-1],[b,vb]=keys[i];return lerp(va,vb,ease((t-a)/(b-a)))}}
+  return keys[keys.length-1][1];
+}
+function rng(seed){let s=seed%2147483647;if(s<=0)s+=2147483646;return()=>(s=s*16807%2147483647)/2147483647}
+function hx(c){c=c.replace('#','');return[parseInt(c.slice(0,2),16),parseInt(c.slice(2,4),16),parseInt(c.slice(4,6),16)]}
+function sh(c,f){const v=hx(c).map(x=>Math.round(f>0?x+(255-x)*f:x*(1+f)));return'#'+v.map(x=>clamp(x,0,255).toString(16).padStart(2,'0')).join('')}
+function mixc(a,b,t){const A=hx(a),B=hx(b);return'#'+A.map((x,i)=>Math.round(lerp(x,B[i],t)).toString(16).padStart(2,'0')).join('')}
+let _id=0;const uid=p=>p+(_id++);
+const svg=(w,h,body,defs='')=>`<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}"><defs>${defs}</defs>${body}</svg>`;
+
+// ---------- 3D planes
+// x,y = posição na tela (centro) com a câmera em repouso; z<0 = longe. fit compensa a perspectiva.
+function plane(world,html,{x=W/2,y=H/2,z=0,w=W,h=H,blur=0,shadow=0,fit=true,op=1,cls=''}={}){
+  const el=document.createElement('div');el.className='pl '+cls;el.innerHTML=html;
+  el.style.width=w+'px';el.style.height=h+'px';
+  const s=fit?(P-z)/P:1;
+  const X=W/2+(x-W/2)*s,Y=H/2+(y-H/2)*s;
+  el._base={X,Y,z,s,w,h};
+  el.style.transform=`translate3d(${X}px,${Y}px,${z}px) scale(${s}) translate(${-w/2}px,${-h/2}px)`;
+  const f=[];if(blur)f.push(`blur(${blur}px)`);if(shadow)f.push(`drop-shadow(0 ${shadow*.5}px ${shadow}px rgba(30,15,0,.45))`);
+  if(f.length)el.style.filter=f.join(' ');
+  if(op!==1)el.style.opacity=op;
+  world.appendChild(el);return el;
+}
+function move(el,dx=0,dy=0,dz=0,extra=''){const b=el._base;el.style.transform=`translate3d(${b.X+dx}px,${b.Y+dy}px,${b.z+dz}px) scale(${b.s}) ${extra} translate(${-b.w/2}px,${-b.h/2}px)`}
+function cam(world,{x=0,y=0,z=0,rx=0,ry=0,rz=0,pz=-600}={}){
+  world.style.transform=`translate3d(${-x}px,${-y}px,${z}px) translate3d(${W/2}px,${H/2}px,${pz}px) rotateX(${rx}deg) rotateY(${ry}deg) rotateZ(${rz}deg) translate3d(${-W/2}px,${-H/2}px,${-pz}px)`;
+}
+
+// ---------- arte
+function skySVG(w,h,stops,sun,clouds){
+  const g=uid('sk');let d=`<linearGradient id="${g}" x1="0" y1="0" x2="0" y2="1">${stops.map(s=>`<stop offset="${s[0]}" stop-color="${s[1]}"/>`).join('')}</linearGradient>`;
+  let b=`<rect width="${w}" height="${h}" fill="url(#${g})"/>`;
+  if(sun){b+=`<circle cx="${sun[0]}" cy="${sun[1]}" r="${sun[2]*5}" fill="url(#glow)"/><circle cx="${sun[0]}" cy="${sun[1]}" r="${sun[2]}" fill="#fff6dc"/>`}
+  if(clouds)b+=cloudsBody(w,h,...clouds);
+  return svg(w,h,b,d);
+}
+function cloudsBody(w,h,n,seed,ymin,ymax,sc,light,shade,op=1){
+  const r=rng(seed);let b=`<g opacity="${op}">`;
+  for(let i=0;i<n;i++){const cx=r()*w,cy=lerp(ymin,ymax,r()),s=sc*(.6+r()*.8);const pf=[];
+    for(let k=0;k<6;k++)pf.push([cx+(r()*2.4-1.2)*s,cy+(r()*.5-.35)*s*.6,s*(.35+r()*.4)]);
+    pf.forEach(p=>b+=`<ellipse cx="${p[0]}" cy="${p[1]}" rx="${p[2]*1.3}" ry="${p[2]*.7}" fill="${shade}"/>`);
+    pf.forEach(p=>b+=`<ellipse cx="${p[0]}" cy="${p[1]-p[2]*.18}" rx="${p[2]*1.18}" ry="${p[2]*.55}" fill="${light}"/>`);}
+  return b+'</g>';
+}
+const HOUSE_COLS=['#c8553d','#e3a33b','#2f7f7a','#f1e3c3','#a34a3a','#d9824a','#3e6e8f','#e8c26a','#8c3b3b','#f0d7a8'];
+function house(x,base,w,h,col,type,r,lit=0){
+  let s='';const top=base-h,dark=sh(col,-.22),trim='#f7efdf',gh=w*.7;
+  s+=`<rect x="${x}" y="${top}" width="${w}" height="${h}" fill="${col}"/>`;
+  // gable
+  if(type===0){ // degraus
+    const st=3,sw=w/(2*st+1.6),hh=gh/(st+.6);let L=[[x,top]];
+    for(let i=0;i<st;i++){L.push([x+i*sw,top-(i+1)*hh]);L.push([x+(i+1)*sw,top-(i+1)*hh])}
+    const pk=[[x+st*sw,top-(st+.6)*hh],[x+w-st*sw,top-(st+.6)*hh]];
+    const R=L.slice().reverse().map(p=>[2*x+w-p[0],p[1]]);
+    const pts=[...L,...pk,...R];s+=`<polygon points="${pts.map(p=>p.join(',')).join(' ')}" fill="${col}"/>`;
+  }else if(type===1){ // sino
+    s+=`<path d="M${x},${top} C${x},${top-gh*.35} ${x+w*.28},${top-gh*.3} ${x+w*.28},${top-gh*.62} L${x+w*.28},${top-gh*.86} L${x+w*.5},${top-gh*1.06} L${x+w*.72},${top-gh*.86} L${x+w*.72},${top-gh*.62} C${x+w*.72},${top-gh*.3} ${x+w},${top-gh*.35} ${x+w},${top} Z" fill="${col}"/>`;
+  }else{ // ponta
+    s+=`<polygon points="${x},${top} ${x+w/2},${top-gh*.9} ${x+w},${top}" fill="${col}"/>`;
+  }
+  s+=`<rect x="${x+w*.93}" y="${top-4}" width="${w*.07}" height="${h+4}" fill="${dark}" opacity=".55"/>`;
+  s+=`<rect x="${x-4}" y="${top-8}" width="${w+8}" height="12" fill="${trim}"/>`;
+  s+=`<circle cx="${x+w/2}" cy="${top-gh*.38}" r="${w*.09}" fill="${trim}"/><circle cx="${x+w/2}" cy="${top-gh*.38}" r="${w*.065}" fill="${lit&&r()<.6?'url(#glassLit)':'url(#glass)'}"/>`;
+  const cols=w>175?3:2,ww=w/(cols*1.9);
+  for(let y=top+34;y<base-150;y+=112){for(let c=0;c<cols;c++){
+    const wx=x+w*(c+.5)/cols-ww/2;const g=lit&&r()<.55?'url(#glassLit)':'url(#glass)';
+    s+=`<rect x="${wx-6}" y="${y-6}" width="${ww+12}" height="86" fill="${trim}"/><rect x="${wx}" y="${y}" width="${ww}" height="74" fill="${g}"/>`;
+    s+=`<line x1="${wx+ww/2}" y1="${y}" x2="${wx+ww/2}" y2="${y+74}" stroke="${trim}" stroke-width="5"/><line x1="${wx}" y1="${y+30}" x2="${wx+ww}" y2="${y+30}" stroke="${trim}" stroke-width="5"/>`;
+    if(r()<.35)s+=`<rect x="${wx-24}" y="${y-2}" width="16" height="78" fill="#2f6b4f"/><rect x="${wx+ww+8}" y="${y-2}" width="16" height="78" fill="#2f6b4f"/>`;}}
+  const dx=x+w*(r()<.5?.3:.62);
+  s+=`<path d="M${dx-30},${base} L${dx-30},${base-96} Q${dx},${base-130} ${dx+30},${base-96} L${dx+30},${base} Z" fill="${trim}"/><path d="M${dx-22},${base} L${dx-22},${base-92} Q${dx},${base-118} ${dx+22},${base-92} L${dx+22},${base} Z" fill="#5a3726"/>`;
+  return s;
+}
+function houseRow(w,base,seed,{hmin=260,hmax=430,wmin=140,wmax=210,lit=0,gap=0}={}){
+  const r=rng(seed);let x=-20,s='';
+  while(x<w){const hw=lerp(wmin,wmax,r()),hh=lerp(hmin,hmax,r());s+=house(x,base,hw,hh,HOUSE_COLS[Math.floor(r()*HOUSE_COLS.length)],Math.floor(r()*3),r,lit);x+=hw+gap}
+  return s;
+}
+function palm(x,base,h,lean,sc=1){
+  const tx=x+lean,ty=base-h;let s=`<path d="M${x},${base} Q${x+lean*.2},${base-h*.55} ${tx},${ty}" stroke="#7b5b3c" stroke-width="${24*sc}" fill="none" stroke-linecap="round"/>`;
+  s+=`<path d="M${x},${base} Q${x+lean*.2},${base-h*.55} ${tx},${ty}" stroke="#5d4229" stroke-width="${24*sc}" fill="none" stroke-dasharray="${5*sc} ${18*sc}"/>`;
+  const L=[[-1,.2],[-.8,-.35],[-.3,-.6],[.3,-.6],[.8,-.35],[1,.2],[-.5,.5],[.55,.5]];
+  L.forEach(([dx,dy],i)=>{const ex=tx+dx*170*sc,ey=ty+dy*110*sc+60*sc*Math.abs(dx);const c=i%2?'#2f7d4a':'#45a05c';
+    s+=`<path d="M${tx},${ty} Q${(tx+ex)/2},${ty+dy*130*sc-50*sc} ${ex},${ey} Q${(tx+ex)/2+6},${ty+dy*120*sc-10*sc} ${tx},${ty+8*sc}" fill="${c}"/>`});
+  s+=`<circle cx="${tx-8*sc}" cy="${ty+12*sc}" r="${11*sc}" fill="#6b4a2a"/><circle cx="${tx+10*sc}" cy="${ty+14*sc}" r="${10*sc}" fill="#6b4a2a"/>`;
+  return s;
+}
+function dutchFlag(x,y,w,h,wave=0){
+  const c=['#f08a24','#ffffff','#2a4f9a'];let s='';
+  for(let i=0;i<3;i++){const y0=y+i*h/3,y1=y0+h/3;s+=`<path d="M${x},${y0} Q${x+w*.5},${y0-wave} ${x+w},${y0} L${x+w},${y1} Q${x+w*.5},${y1-wave} ${x},${y1} Z" fill="${c[i]}"/>`}
+  return s;
+}
+function ship(sc=1,wave=0){
+  const W2=460,H2=520;let s=`<g transform="scale(${sc})">`;
+  const masts=[[150,70],[245,40],[335,95]];
+  masts.forEach(([mx,mt])=>{s+=`<line x1="${mx}" y1="400" x2="${mx}" y2="${mt}" stroke="#4a2e1c" stroke-width="9"/>`});
+  masts.forEach(([mx,mt],i)=>{const sw=i==1?92:76;[[mt+40,mt+150],[mt+165,mt+265]].forEach(([y1,y2],k)=>{if(i==2&&k==1)return;const ww=sw*(k?1.08:.92);
+    s+=`<path d="M${mx-ww},${y1} Q${mx},${y1-14} ${mx+ww},${y1} L${mx+ww*1.06},${y2} Q${mx+8},${y2+26} ${mx-ww*1.06},${y2} Z" fill="#f4e7c9"/>`;
+    s+=`<path d="M${mx+ww*.2},${y1+4} Q${mx+ww*.6},${(y1+y2)/2} ${mx+ww*.25},${y2+14} L${mx+ww*1.06},${y2} L${mx+ww},${y1} Z" fill="#dccaa3"/>`;
+    s+=`<line x1="${mx-ww-4}" y1="${y1}" x2="${mx+ww+4}" y2="${y1}" stroke="#4a2e1c" stroke-width="6"/>`})});
+  s+=`<line x1="380" y1="395" x2="470" y2="330" stroke="#4a2e1c" stroke-width="7"/><path d="M390,395 L460,338 L440,392 Z" fill="#f4e7c9"/>`;
+  s+=dutchFlag(245,-8,78,46,wave);
+  s+=`<path d="M10,380 L120,380 L120,330 L30,330 Z" fill="#7a4628"/><rect x="18" y="320" width="104" height="12" fill="#c99a45"/>`;
+  s+=`<path d="M10,380 L430,380 L405,452 Q230,476 60,452 Z" fill="#7a4628"/><path d="M60,452 Q230,476 405,452 L398,470 Q230,492 68,470 Z" fill="#3c2416"/>`;
+  s+=`<rect x="30" y="398" width="390" height="10" fill="#c99a45"/>`;
+  for(let i=0;i<8;i++)s+=`<rect x="${80+i*40}" y="${416}" width="16" height="14" fill="#2a1a10"/>`;
+  s+=`<rect x="22" y="342" width="22" height="26" fill="url(#glassLit)" opacity=".8"/></g>`;
+  return svg(W2*sc,H2*sc,s);
+}
+function hillOlinda(w,h,col='#5f9a52'){
+  let s=`<path d="M0,${h} L0,${h*.62} Q${w*.18},${h*.35} ${w*.42},${h*.42} Q${w*.62},${h*.5} ${w*.78},${h*.58} Q${w*.92},${h*.62} ${w},${h*.66} L${w},${h} Z" fill="${col}"/>`;
+  const r=rng(77);for(let i=0;i<26;i++){const x=w*(.05+r()*.7),y=h*(.5+r()*.2)+Math.abs(x-w*.42)*.12;s+=`<rect x="${x}" y="${y}" width="${30+r()*20}" height="${26+r()*12}" fill="${['#f2ead8','#e7c98d','#d9a06b'][i%3]}"/><polygon points="${x-3},${y} ${x+20},${y-14} ${x+48},${y}" fill="#b5523b"/>`}
+  // igreja
+  const cx=w*.4,cy=h*.42;s+=`<rect x="${cx-55}" y="${cy-70}" width="110" height="70" fill="#f4efe4"/><rect x="${cx-70}" y="${cy-120}" width="30" height="120" fill="#ece5d6"/><rect x="${cx+40}" y="${cy-120}" width="30" height="120" fill="#ece5d6"/>`;
+  s+=`<polygon points="${cx-74},${cy-120} ${cx-55},${cy-150} ${cx-36},${cy-120}" fill="#b5523b"/><polygon points="${cx+36},${cy-120} ${cx+55},${cy-150} ${cx+74},${cy-120}" fill="#b5523b"/><polygon points="${cx-40},${cy-70} ${cx},${cy-100} ${cx+40},${cy-70}" fill="#ece5d6"/><path d="M${cx-12},${cy} L${cx-12},${cy-30} Q${cx},${cy-42} ${cx+12},${cy-30} L${cx+12},${cy} Z" fill="#5a3726"/>`;
+  return s;
+}
+function waterSVG(w,h,top,bot,seed,stripes=40){
+  const g=uid('wt');let b=`<rect width="${w}" height="${h}" fill="url(#${g})"/>`;const r=rng(seed);
+  for(let i=0;i<stripes;i++){const y=Math.pow(r(),1.6)*h,x=r()*w,l=40+(y/h)*260;b+=`<rect x="${x}" y="${y}" width="${l}" height="${3+y/h*7}" rx="4" fill="#fff" opacity="${.12+r()*.25}"/>`}
+  return svg(w,h,b,`<linearGradient id="${g}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${top}"/><stop offset="1" stop-color="${bot}"/></linearGradient>`);
+}
+function person2D(x,base,sc,col,r,armsUp=0){
+  const skin=['#e8b98f','#c98e5f','#8d5a3b','#f0caa6'][Math.floor(r()*4)];const hat=r()<.4;
+  let s=`<g transform="translate(${x},${base}) scale(${sc})">`;
+  s+=`<rect x="-20" y="-120" width="40" height="78" rx="14" fill="${col}"/><rect x="-16" y="-48" width="13" height="48" fill="#3b2a22"/><rect x="3" y="-48" width="13" height="48" fill="#3b2a22"/>`;
+  if(armsUp){s+=`<rect x="-34" y="-170" width="11" height="60" rx="5" fill="${col}" transform="rotate(-18 -28 -112)"/><rect x="23" y="-170" width="11" height="60" rx="5" fill="${col}" transform="rotate(18 28 -112)"/>`}
+  s+=`<circle cx="0" cy="-142" r="24" fill="${skin}"/><circle cx="-8" cy="-146" r="3" fill="#1d1712"/><circle cx="8" cy="-146" r="3" fill="#1d1712"/>`;
+  if(hat)s+=`<ellipse cx="0" cy="-160" rx="34" ry="8" fill="#2a2420"/><rect x="-18" y="-186" width="36" height="26" rx="8" fill="#2a2420"/>`;
+  return s+'</g>';
+}
+function crowd(w,base,n,seed,sc=1,armsUp=.5){
+  const r=rng(seed);let s='';const cs=['#c8553d','#2f7f7a','#e3a33b','#3e6e8f','#f1e3c3','#8c3b3b','#5f9a52'];
+  const ps=[];for(let i=0;i<n;i++)ps.push([r()*w,base+r()*18,sc*(.85+r()*.3),r()<armsUp]);ps.sort((a,b)=>a[1]-b[1]).forEach(p=>s+=person(p[0],p[1],p[2],'',r,p[3]));
+  return s;
+}
+function nassau(){return svg(420,900,sprImg('nassau',8,320,560,0,0,880-.95*735,420,735))}
+function ox(){return svg(560,420,sprImg('ox',4,560,420,0,0,0,560,420))}
+function bridgeSVG(w,h,deckY){
+  let s='';const r=rng(9);
+  for(let i=0;i<7;i++){const x=80+i*(w-160)/6;s+=`<path d="M${x-60},${h} L${x-60},${deckY+40} L${x+60},${deckY+40} L${x+60},${h} Z" fill="#b9a98c"/><rect x="${x-60}" y="${deckY+40}" width="120" height="16" fill="#d6c7a6"/><rect x="${x+40}" y="${deckY+56}" width="20" height="${h-deckY-56}" fill="#94856b"/>`}
+  s+=`<rect x="0" y="${deckY}" width="${w}" height="44" fill="#7a5233"/><rect x="0" y="${deckY+30}" width="${w}" height="14" fill="#5a3a22"/>`;
+  for(let x=10;x<w;x+=46)s+=`<rect x="${x}" y="${deckY-70}" width="9" height="72" fill="#6b4529"/>`;
+  s+=`<rect x="0" y="${deckY-74}" width="${w}" height="12" fill="#8a5d3a"/><rect x="0" y="${deckY-34}" width="${w}" height="7" fill="#8a5d3a"/>`;
+  return s;
+}
+function telescopeScene(w,h){
+  let s='';const r=rng(31);
+  // terraço
+  s+=`<rect x="0" y="${h-520}" width="${w}" height="520" fill="#2a2f4a"/><rect x="0" y="${h-540}" width="${w}" height="30" fill="#3d4466"/>`;
+  for(let x=20;x<w;x+=70)s+=`<rect x="${x}" y="${h-640}" width="26" height="100" rx="10" fill="#3d4466"/>`;
+  s+=`<rect x="0" y="${h-660}" width="${w}" height="26" fill="#4a5278"/>`;
+  // tripé + luneta
+  const bx=w*.5,by=h-660;
+  s+=`<path d="M${bx},${by-200} L${bx-120},${by} M${bx},${by-200} L${bx+120},${by} M${bx},${by-200} L${bx+10},${by}" stroke="#5b3d24" stroke-width="14" stroke-linecap="round"/>`;
+  s+=`<g transform="rotate(-32 ${bx} ${by-210})"><rect x="${bx-240}" y="${by-246}" width="470" height="70" rx="12" fill="url(#brass)"/><rect x="${bx+210}" y="${by-256}" width="50" height="90" rx="10" fill="#7d5620"/><rect x="${bx-270}" y="${by-232}" width="40" height="42" rx="6" fill="#7d5620"/><rect x="${bx-60}" y="${by-248}" width="22" height="74" fill="#7d5620"/></g>`;
+  s+=`<circle cx="${bx}" cy="${by-206}" r="20" fill="#3a2414"/>`;
+  // globo celeste
+  s+=`<rect x="${w*.15-8}" y="${by-140}" width="16" height="140" fill="#5b3d24"/><circle cx="${w*.15}" cy="${by-180}" r="70" fill="#2f5d7a"/><ellipse cx="${w*.15}" cy="${by-180}" rx="70" ry="22" fill="none" stroke="url(#brass)" stroke-width="8"/><circle cx="${w*.15}" cy="${by-180}" r="70" fill="none" stroke="url(#brass)" stroke-width="8"/>`;
+  return s;
+}
+function nightSky(w,h,seed){
+  let b=`<rect width="${w}" height="${h}" fill="url(#ns${seed})"/>`;const r=rng(seed);
+  for(let i=0;i<260;i++){const x=r()*w,y=r()*h*.8,rr=r()<.08?4:1.2+r()*1.8;b+=`<circle cx="${x}" cy="${y}" r="${rr}" fill="#fff" opacity="${.4+r()*.6}"/>`}
+  b+=`<circle cx="${w*.78}" cy="${h*.16}" r="300" fill="url(#glow)" opacity=".35"/><circle cx="${w*.78}" cy="${h*.16}" r="80" fill="#fbf3dc"/><circle cx="${w*.78+28}" cy="${h*.16-14}" r="72" fill="#1f2648" opacity=".15"/>`;
+  return svg(w,h,b,`<linearGradient id="ns${seed}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d1230"/><stop offset=".6" stop-color="#26305e"/><stop offset="1" stop-color="#5a4a78"/></linearGradient>`);
+}
+function synagogue(w,h){
+  let s='';const base=h;const fx=90,fw=w-180,top=base-1060;
+  s+=`<rect x="${fx}" y="${top}" width="${fw}" height="1060" fill="#efe2c6"/><rect x="${fx+fw-30}" y="${top}" width="30" height="1060" fill="#d8c8a6"/>`;
+  s+=`<rect x="${fx-14}" y="${top-24}" width="${fw+28}" height="34" fill="#fbf4e4"/><rect x="${fx-14}" y="${top+500}" width="${fw+28}" height="20" fill="#fbf4e4"/>`;
+  s+=`<polygon points="${fx-14},${top-24} ${fx+fw/2},${top-220} ${fx+fw+14},${top-24}" fill="#e6d6b4"/><circle cx="${fx+fw/2}" cy="${top-100}" r="56" fill="#fbf4e4"/><circle cx="${fx+fw/2}" cy="${top-100}" r="44" fill="url(#glassLit)"/>`;
+  const cx=fx+fw/2,cy=top-100,R=26;s+=`<polygon points="${[0,1,2].map(i=>{const a=-Math.PI/2+i*2*Math.PI/3;return`${cx+R*Math.cos(a)},${cy+R*Math.sin(a)}`}).join(' ')}" fill="none" stroke="#7a4a1a" stroke-width="5"/><polygon points="${[0,1,2].map(i=>{const a=Math.PI/2+i*2*Math.PI/3;return`${cx+R*Math.cos(a)},${cy+R*Math.sin(a)}`}).join(' ')}" fill="none" stroke="#7a4a1a" stroke-width="5"/>`;
+  for(let fl=0;fl<2;fl++)for(let c=0;c<3;c++){const wx=fx+70+c*(fw-140)/2-55,wy=top+120+fl*520;
+    s+=`<path d="M${wx-12},${wy+250} L${wx-12},${wy+50} Q${wx+55},${wy-34} ${wx+122},${wy+50} L${wx+122},${wy+250} Z" fill="#fbf4e4"/><path d="M${wx},${wy+240} L${wx},${wy+54} Q${wx+55},${wy-18} ${wx+110},${wy+54} L${wx+110},${wy+240} Z" fill="url(#glassLit)"/><line x1="${wx+55}" y1="${wy+10}" x2="${wx+55}" y2="${wy+240}" stroke="#fbf4e4" stroke-width="7"/>`;
+    if(fl==0)s+=`<rect x="${wx-24}" y="${wy+250}" width="146" height="16" fill="#fbf4e4"/><path d="M${wx-20},${wy+266} L${wx+118},${wy+266}" stroke="#2c2a2a" stroke-width="8"/>`}
+  s+=`<path d="M${cx-80},${base} L${cx-80},${base-230} Q${cx},${base-310} ${cx+80},${base-230} L${cx+80},${base} Z" fill="#fbf4e4"/><path d="M${cx-64},${base} L${cx-64},${base-222} Q${cx},${base-288} ${cx+64},${base-222} L${cx+64},${base} Z" fill="#5a3726"/>`;
+  s+=`<rect x="${cx-190}" y="${base-380}" width="380" height="70" rx="10" fill="#2a3a4a"/><text x="${cx}" y="${base-333}" text-anchor="middle" font-family="RB" font-weight="800" font-size="40" fill="#f3e3b8" letter-spacing="3">KAHAL ZUR ISRAEL · 1636</text>`;
+  [[fx+60,base-400],[fx+fw-60,base-400]].forEach(([lx,ly])=>{s+=`<circle cx="${lx}" cy="${ly}" r="120" fill="url(#lamp)"/><rect x="${lx-14}" y="${ly-30}" width="28" height="46" rx="6" fill="#ffd27a"/><rect x="${lx-20}" y="${ly-38}" width="40" height="10" fill="#2c2420"/>`});
+  return s;
+}
+function hills(w,h,cols){
+  let s='';cols.forEach((c,i)=>{const y0=h*(.35+i*.18),r=rng(50+i);let d=`M0,${h} L0,${y0}`;for(let x=0;x<=w;x+=w/6)d+=` Q${x+w/12},${y0-80-r()*120} ${x+w/6},${y0-r()*60}`;s+=`<path d="${d} L${w},${h} Z" fill="${c}"/>`});return s;
+}
+function mapSVG(w,h){
+  // mapa estilizado: América do Norte (alto) e do Sul (baixo), Atlântico à direita
+  let s=`<rect width="${w}" height="${h}" fill="url(#ocean)"/>`;
+  for(let y=0;y<h;y+=140)s+=`<line x1="0" y1="${y}" x2="${w}" y2="${y}" stroke="#fff" stroke-opacity=".07" stroke-width="3"/>`;
+  for(let x=0;x<w;x+=140)s+=`<line x1="${x}" y1="0" x2="${x}" y2="${h}" stroke="#fff" stroke-opacity=".07" stroke-width="3"/>`;
+  const land='#e9d9b0',edge='#c9b384';
+  const NA=`M0,0 L1000,0 L980,90 Q900,150 880,240 Q860,300 900,360 L840,420 Q780,470 760,560 Q720,640 640,700 Q560,760 520,860 Q470,950 380,1000 Q300,1030 220,1010 Q120,990 60,1040 L0,1060 Z`;
+  const SA=`M0,1500 Q180,1430 300,1470 Q420,1500 520,1560 Q640,1600 740,1690 Q820,1740 900,1760 Q960,1790 1000,1860 L1040,1920 L0,1920 Z`;
+  const CA=`M0,1080 Q100,1120 160,1200 Q220,1300 140,1380 Q80,1430 0,1440 Z`;
+  [NA,SA,CA].forEach(p=>{s+=`<path d="${p}" fill="${edge}" transform="translate(0,10)"/><path d="${p}" fill="${land}"/>`});
+  const r=rng(4);for(let i=0;i<40;i++){const x=r()*700,y=r()*800;s+=`<circle cx="${x}" cy="${y}" r="${8+r()*14}" fill="#9fbf7a" opacity=".55"/>`}
+  for(let i=0;i<30;i++){const x=r()*900,y=1600+r()*300;s+=`<circle cx="${x}" cy="${y}" r="${8+r()*14}" fill="#9fbf7a" opacity=".55"/>`}
+  return s;
+}
+function windmill(x,base,sc){
+  return `<g transform="translate(${x},${base}) scale(${sc})"><polygon points="-50,0 50,0 34,-200 -34,-200" fill="#8a5a3a"/><polygon points="-40,-200 40,-200 0,-250" fill="#4a3426"/><rect x="-14" y="-50" width="28" height="50" fill="#3a2414"/><g class="blades" transform="translate(0,-215)">${[0,90,180,270].map(a=>`<g transform="rotate(${a})"><rect x="-6" y="-170" width="12" height="170" fill="#5b3d24"/><rect x="6" y="-160" width="40" height="120" fill="#f4e7c9" stroke="#5b3d24" stroke-width="4"/></g>`).join('')}<circle r="14" fill="#2a1a10"/></g></g>`;
+}
+function goldBar(x,y,s){
+  return `<g transform="translate(${x},${y}) scale(${s})"><polygon points="-90,0 90,0 70,-46 -70,-46" fill="url(#gold)"/><polygon points="90,0 70,-46 80,-46 102,0" fill="url(#goldSide)"/><polygon points="-70,-46 70,-46 62,-52 -62,-52" fill="#fff4c2"/><rect x="-36" y="-34" width="72" height="18" rx="4" fill="#d9a12e" opacity=".7"/></g>`;
+}
+
+
+// ======== PERSONAGENS 3D (sprites renderizados por raymarching) ========
+function sprImg(file,n,fw,fh,frame,x,y,w,h,extra=''){return `<svg x="${x}" y="${y}" width="${w}" height="${h}" viewBox="0 0 ${fw} ${fh}" preserveAspectRatio="none" overflow="hidden"><image class="sf" data-fw="${fw}" data-n="${n}" ${extra} href="sprites/${file}.png" x="${-frame*fw}" y="0" width="${fw*n}" height="${fh}"/></svg>`}
+function setFrame(el,f){el.querySelectorAll('image.sf').forEach(i=>i.setAttribute('x',-(f%(+i.dataset.n))*(+i.dataset.fw)))}
+function animCrowd(el,t){el.querySelectorAll('image.sf[data-ch="1"]').forEach((i,k)=>{const n=+i.dataset.n,ph=+i.dataset.ph;i.setAttribute('x',-((Math.floor(t*7+ph)%n))*(+i.dataset.fw))})}
+function person(x,base,sc,col,r,armsUp){const v=Math.floor(r()*10),k=.56*sc,w=240*k,h=400*k;const ph=Math.floor(r()*6);
+  return sprImg('pv'+v,6,240,400,armsUp?ph:0,x-w/2,base-h*.94,w,h,armsUp?`data-ch="1" data-ph="${ph}"`:'')}
+
+// ---------- cenas
+const SCENES=[];
+function scene(t0,t1,build,update){const world=document.createElement('div');world.className='world';world.style.display='none';document.getElementById('stage').appendChild(world);const S={t0,t1,world,update,od:t1-t0};build(world,S);if(S.year)S.year.style.display='none';if(S.badge)S.badge.style.display='none';SCENES.push(S);return S}
+
+// 1. GANCHO — canal do Recife holandês ao pôr do sol (dolly pelo canal)
+scene(0,4.3,(w,S)=>{
+  plane(w,skySVG(1400,1300,[[0,'#3a4f8c'],[.45,'#e58a6a'],[.75,'#ffc98a'],[1,'#ffe2b0']],[700,820,70],[10,3,120,700,120,'#ffe8d0','#f0a88a',.9]),{y:700,z:-3200,w:1400,h:1300});
+  plane(w,svg(1500,700,houseRow(1500,700,21,{hmin:200,hmax:320,lit:1})),{y:1080,z:-1800,w:1500,h:700,blur:2.5,op:.95});
+  S.water=plane(w,waterSVG(1600,900,'#e7a780','#3d5a78',3,70),{y:1420,z:-900,w:1600,h:900});
+  S.boat=plane(w,svg(300,120,`<path d="M10,40 L290,40 L250,100 L50,100 Z" fill="#7a4628"/><rect x="40" y="30" width="220" height="12" fill="#c99a45"/>${person2D(150,40,.6,'#2f7f7a',rng(3))}`),{x:640,y:1210,z:-1100,w:300,h:120,shadow:10});
+  plane(w,svg(700,1300,houseRow(700,1300,5,{hmin:520,hmax:820,wmin:200,wmax:260,lit:1})+palm(560,1300,620,-60,1.3)),{x:200,y:900,z:-700,w:700,h:1300,shadow:30});
+  plane(w,svg(700,1300,houseRow(700,1300,8,{hmin:520,hmax:820,wmin:200,wmax:260,lit:1})+palm(120,1300,560,70,1.2)),{x:900,y:920,z:-760,w:700,h:1300,shadow:30});
+  plane(w,svg(500,1700,houseRow(500,1700,13,{hmin:900,hmax:1200,wmin:230,wmax:280,lit:1})),{x:-40,y:1050,z:-120,w:500,h:1700,blur:7,shadow:40});
+  plane(w,svg(500,1700,houseRow(500,1700,17,{hmin:900,hmax:1200,wmin:230,wmax:280,lit:1})),{x:1120,y:1060,z:-160,w:500,h:1700,blur:7,shadow:40});
+  S.flag=plane(w,svg(260,620,`<line x1="20" y1="620" x2="20" y2="0" stroke="#3a2a1a" stroke-width="10"/><g id="fl1">${dutchFlag(25,8,220,140,0)}</g>`),{x:430,y:560,z:-1300,w:260,h:620,shadow:12});
+},(S,t)=>{
+  cam(S.world,{z:kf(t,[[0,0],[4.3,520]],x=>x),y:kf(t,[[0,0],[4.3,-60]]),ry:kf(t,[[0,-3],[4.3,3]]),rz:kf(t,[[0,-1],[4.3,.5]])});
+  move(S.water,(t*40)%80-40);move(S.boat,-t*30,Math.sin(t*2)*4);
+  S.flag.querySelector('#fl1').innerHTML=dutchFlag(25,8,220,140,Math.sin(t*5)*18);
+});
+
+// 2. 1630 — a frota chega diante de Olinda
+scene(4.3,10.2,(w,S)=>{
+  plane(w,skySVG(1500,1400,[[0,'#5c86c4'],[.6,'#bcd6ea'],[1,'#fbe6c4']],[1100,900,60],[16,8,120,900,140,'#ffffff','#d5e1ef']),{y:640,z:-3400,w:1500,h:1400});
+  S.year=plane(w,`<div style="font-family:RB;font-weight:900;font-stretch:75%;font-size:400px;color:#fff;opacity:.85;line-height:1;text-align:center;-webkit-text-stroke:12px rgba(40,60,100,.25)">1630</div>`,{y:520,z:-2600,w:1200,h:560});
+  plane(w,svg(1500,800,hillOlinda(1500,800)),{y:1030,z:-2000,w:1500,h:800,blur:1.5});
+  plane(w,waterSVG(1800,1100,'#6aa9c9','#1c4a6e',8,90),{y:1500,z:-1400,w:1800,h:1100});
+  S.ships=[];[[300,1040,-1700,.55],[760,1080,-1500,.65],[520,1170,-1100,.85],[900,1250,-900,.95]].forEach(([x,y,z,s],i)=>{S.ships.push(plane(w,ship(s,6),{x,y,z,w:460*s,h:520*s,shadow:16}))});
+  S.hero=plane(w,ship(1.5,10),{x:430,y:1350,z:-350,w:690,h:780,shadow:34});
+  plane(w,svg(1400,300,`<path d="M0,120 Q200,40 400,110 Q600,180 800,100 Q1000,20 1200,110 Q1300,150 1400,120 L1400,300 L0,300 Z" fill="#1c4a6e"/><path d="M0,130 Q200,60 400,120 Q600,190 800,110 Q1000,40 1200,120 L1400,130" stroke="#e8f4ff" stroke-width="10" fill="none" opacity=".6"/>`),{y:1800,z:-80,w:1400,h:300,blur:3});
+},(S,t)=>{
+  cam(S.world,{x:kf(t,[[0,-120],[5.9,140]]),z:kf(t,[[0,0],[5.9,300]]),ry:kf(t,[[0,4],[5.9,-4]]),y:kf(t,[[0,40],[5.9,-40]])});
+  S.ships.forEach((s,i)=>move(s,t*(18+i*6),Math.sin(t*1.6+i)*6,0,`rotate(${Math.sin(t*1.3+i)*1.5}deg)`));
+  move(S.hero,t*26,Math.sin(t*1.4)*10,0,`rotate(${Math.sin(t*1.1)*2}deg)`);
+  move(S.year,0,0,kf(t,[[0,-200],[1.2,0]],eout));S.year.style.opacity=kf(t,[[0,0],[.8,1],[2.8,1],[3.2,0]]);
+});
+
+// 3. 1637 — chega Maurício de Nassau
+scene(10.2,15.7,(w,S)=>{
+  plane(w,skySVG(1400,1300,[[0,'#6f9bd0'],[.7,'#f6cf9e'],[1,'#ffe9c4']],[300,900,70],[8,11,150,700,130,'#fff8ee','#e9c9b0']),{y:700,z:-3200,w:1400,h:1300});
+  S.year=plane(w,`<div style="font-family:RB;font-weight:900;font-stretch:75%;font-size:400px;color:#fff;opacity:.9;line-height:1;text-align:center">1637</div>`,{y:520,z:-2500,w:1200,h:560});
+  plane(w,svg(1500,700,houseRow(1500,700,33,{hmin:220,hmax:360})),{y:1040,z:-1700,w:1500,h:700,blur:2});
+  plane(w,waterSVG(1600,700,'#8fc0d6','#2c5f80',12,60),{y:1350,z:-1200,w:1600,h:700});
+  plane(w,ship(.9,6),{x:860,y:1110,z:-1300,w:414,h:468,shadow:14});
+  plane(w,svg(1400,700,`<rect y="100" width="1400" height="600" fill="#8a6a4a"/><rect y="90" width="1400" height="24" fill="#a88560"/>${Array.from({length:30},(_,i)=>`<rect x="${i*48}" y="114" width="44" height="586" fill="${i%2?'#7d5d3f':'#86664a'}"/>`).join('')}`),{y:1780,z:-500,w:1400,h:700});
+  S.crowd=plane(w,svg(1200,300,crowd(1200,280,16,7,1.1,.6)),{y:1440,z:-760,w:1200,h:300,shadow:14});
+  S.n=plane(w,nassau(),{x:540,y:1300,z:-260,w:420,h:900,shadow:30});
+  plane(w,svg(600,1500,palm(300,1500,1150,-90,1.9)),{x:1080,y:900,z:-150,w:600,h:1500,blur:6});
+},(S,t)=>{
+  cam(S.world,{z:kf(t,[[0,0],[5.5,380]]),y:kf(t,[[0,-80],[5.5,40]]),ry:kf(t,[[0,-6],[5.5,5]]),rx:kf(t,[[0,2],[5.5,-1]])});
+  const a=eback(prog(t,.3,1.0));move(S.n,0,lerp(260,0,a),0,'');setFrame(S.n,Math.floor(t*8));animCrowd(S.crowd,t);
+  move(S.crowd,0,Math.abs(Math.sin(t*6))*-8);
+  S.year.style.opacity=kf(t,[[0,0],[.6,1]]);move(S.year,0,0,kf(t,[[0,-260],[1,0]],eout));
+});
+
+// 4. PONTE + BOI VOADOR
+scene(15.7,22.6,(w,S)=>{
+  plane(w,skySVG(1500,1400,[[0,'#4d7fc6'],[.6,'#a8d0ec'],[1,'#f9e7c9']],[900,1100,60],[12,21,100,900,150,'#ffffff','#d9e4f0']),{y:640,z:-3400,w:1500,h:1400});
+  plane(w,svg(1600,600,houseRow(1600,600,44,{hmin:200,hmax:320})+palm(200,600,380,-30,.9)+palm(1300,600,420,40,1)),{y:1100,z:-2000,w:1600,h:600,blur:2});
+  plane(w,waterSVG(1700,900,'#7fb7cf','#2a5a7a',14,70),{y:1480,z:-1300,w:1700,h:900});
+  plane(w,svg(1800,700,bridgeSVG(1800,700,260)),{y:1450,z:-950,w:1800,h:700,shadow:20});
+  S.crowd=plane(w,svg(1700,240,crowd(1700,230,26,12,1,.8)),{y:1300,z:-930,w:1700,h:240});
+  S.ox=plane(w,ox(),{x:540,y:620,z:-700,w:560,h:420,shadow:40});
+  S.rope=plane(w,svg(1400,200,`<path d="M0,40 Q700,170 1400,40" stroke="#5b3d24" stroke-width="7" fill="none"/>`),{y:360,z:-720,w:1400,h:200});
+  plane(w,svg(1300,400,crowd(1300,380,12,15,2.3,.9)),{y:1880,z:-120,w:1300,h:400,blur:5});
+},(S,t)=>{
+  cam(S.world,{x:kf(t,[[0,0],[6.9,0]]),y:kf(t,[[0,250],[2.2,250],[4,-160],[6.9,-200]]),z:kf(t,[[0,0],[6.9,260]]),rx:kf(t,[[0,-4],[2.2,-4],[4,5],[6.9,5]])});
+  const ox=kf(t,[[1.5,-900],[6.9,700]],x=>x);move(S.ox,ox,Math.sin(t*3)*14,0,`rotate(${Math.sin(t*2.2)*6}deg)`);setFrame(S.ox,Math.floor(t*6));animCrowd(S.crowd,t);
+  move(S.crowd,0,Math.abs(Math.sin(t*7))*-10);
+});
+
+// 5. OBSERVATÓRIO -> SINAGOGA (pan lateral à noite)
+scene(22.6,29.6,(w,S)=>{
+  plane(w,nightSky(3000,1600,5),{x:1300,y:700,z:-3000,w:3000,h:1600});
+  plane(w,svg(3000,700,houseRow(3000,700,55,{hmin:220,hmax:360,lit:1})),{x:1300,y:1150,z:-1800,w:3000,h:700,blur:2.5,op:.75});
+  plane(w,svg(1100,1400,telescopeScene(1100,1400)),{x:540,y:1250,z:-500,w:1100,h:1400,shadow:30});
+  plane(w,svg(1100,1500,synagogue(1100,1500)),{x:2050,y:1240,z:-650,w:1100,h:1500,shadow:30});
+  plane(w,svg(3400,500,`<rect y="200" width="3400" height="300" fill="#3a3a52"/>${Array.from({length:140},(_,i)=>`<ellipse cx="${(i*97)%3400}" cy="${230+(i*37)%260}" rx="30" ry="12" fill="#4a4a66"/>`).join('')}`),{x:1300,y:1980,z:-600,w:3400,h:500});
+  S.lbl1=plane(w,`<div style="font-family:RB;font-weight:900;font-stretch:75%;font-size:64px;color:#ffe9b0;text-align:center;-webkit-text-stroke:10px #14110f;paint-order:stroke fill">1º OBSERVATÓRIO<br>DAS AMÉRICAS</div>`,{x:540,y:420,z:-300,w:900,h:180});
+  S.lbl2=plane(w,`<div style="font-family:RB;font-weight:900;font-stretch:75%;font-size:64px;color:#ffe9b0;text-align:center;-webkit-text-stroke:10px #14110f;paint-order:stroke fill">1ª SINAGOGA<br>DAS AMÉRICAS</div>`,{x:2325,y:420,z:-300,w:900,h:180});
+},(S,t)=>{
+  const px=kf(t,[[0,-60],[3.0,60],[4.2,2040],[7,2120]]);
+  cam(S.world,{x:px,z:kf(t,[[0,0],[3,140],[4.2,-260],[7,-120]]),ry:kf(t,[[0,4],[3,-2],[3.6,-9],[4.2,0],[7,-3]])});
+  S.lbl1.style.opacity=kf(t,[[0,0],[.6,1],[3.0,1],[3.4,0]]);S.lbl2.style.opacity=kf(t,[[3.8,0],[4.4,1]]);
+  move(S.lbl1,0,kf(t,[[0,40],[.6,0]],eout));move(S.lbl2,0,kf(t,[[3.8,40],[4.4,0]],eout));
+});
+
+// 6. 1654 — expulsão (bandeira desce, navios partem)
+scene(29.6,33.7,(w,S)=>{
+  plane(w,skySVG(1500,1400,[[0,'#3b3f5c'],[.55,'#a5707a'],[1,'#f0b68a']],[800,1000,55],[14,61,150,900,140,'#d8c2c8','#8d6f86']),{y:640,z:-3400,w:1500,h:1400});
+  S.year=plane(w,`<div style="font-family:RB;font-weight:900;font-stretch:75%;font-size:400px;color:#ffd9b0;opacity:.9;line-height:1;text-align:center">1654</div>`,{y:560,z:-2500,w:1200,h:560});
+  S.ships=[];[[700,1090,-1900,.5],[900,1120,-1700,.6]].forEach(([x,y,z,s])=>S.ships.push(plane(w,ship(s,4),{x,y,z,w:460*s,h:520*s})));
+  plane(w,svg(1700,600,`<rect y="120" width="1700" height="480" fill="#4a6a86"/>`),{y:1300,z:-1600,w:1700,h:600});
+  plane(w,svg(1600,1000,hills(1600,1000,['#5a7a4a','#45663c','#33522d'])),{y:1450,z:-1000,w:1600,h:1000,shadow:20});
+  S.smoke=[];for(let i=0;i<5;i++)S.smoke.push(plane(w,svg(300,300,`<circle cx="150" cy="150" r="120" fill="#e9e2da" opacity=".85"/><circle cx="110" cy="120" r="80" fill="#fff" opacity=".7"/>`),{x:150+i*190,y:1180,z:-1050,w:300,h:300,blur:4}));
+  S.mast=plane(w,svg(300,1100,`<line x1="40" y1="1100" x2="40" y2="0" stroke="#3a2a1a" stroke-width="14"/><g id="fl6"></g>`),{x:470,y:1050,z:-420,w:300,h:1100,shadow:20});
+  plane(w,svg(1700,700,hills(1700,700,['#3c5a32'])),{y:1650,z:-600,w:1700,h:700});
+  S.fgp=plane(w,svg(1500,700,band(1500,680,6,51,['#c8553d','#8c3b3b','#e3a33b','#f1e3c3'],0,1,3.4,1)),{x:420,y:1780,z:-150,w:1500,h:700,blur:7});
+  S.sm2=plane(w,smokeSVG(),{x:880,y:1350,z:-250,w:400,h:400,blur:7});
+},(S,t)=>{
+  move(S.fgp,kf(t,[[0,-120],[4.1,120]]),-Math.abs(Math.sin(t*5))*12);animCrowd(S.fgp,t);{const p=(t*.25)%1;move(S.sm2,p*60,-p*160,0,`scale(${.8+p*.6})`);S.sm2.style.opacity=Math.sin(p*Math.PI)*.7}
+  cam(S.world,{z:kf(t,[[0,0],[4.1,320]]),x:kf(t,[[0,-60],[4.1,60]]),ry:kf(t,[[0,4],[4.1,-4]]),y:kf(t,[[0,-40],[4.1,60]]),rz:kf(t,[[0,1.5],[4.1,-1.5]])});
+  const fy=kf(t,[[.6,20],[3.6,820]]);S.mast.querySelector('#fl6').innerHTML=dutchFlag(46,fy,220,140,Math.sin(t*4)*14);
+  S.ships.forEach((s,i)=>move(s,t*60+i*20,Math.sin(t*1.5+i)*4));
+  S.smoke.forEach((s,i)=>{const p=((t*.35+i*.2)%1);move(s,0,-p*260,0,`scale(${.6+p})`);s.style.opacity=(1-p)*.8});
+  S.year.style.opacity=kf(t,[[0,0],[.5,1]]);move(S.year,0,kf(t,[[0,80],[.8,0]],eout));
+});
+
+// 7. MAPA Recife -> Nova Amsterdã -> Nova York
+scene(33.7,42.6,(w,S)=>{
+  S.bgo=plane(w,svg(3000,4000,`<rect width="3000" height="4000" fill="#1d5070"/>`),{z:-1400,w:3000,h:4000});
+  S.map=plane(w,svg(1080,1920,mapSVG(1080,1920)),{z:-600,w:1080,h:1920});
+  S.route=plane(w,svg(1080,1920,`<path id="rt" d="M890,1700 C1060,1300 1000,700 720,520" stroke="#fff" stroke-width="10" fill="none" stroke-dasharray="26 22" opacity=".9"/><path id="rtc" d="M890,1700 C1060,1300 1000,700 720,520" stroke="#ffc531" stroke-width="12" fill="none"/><circle cx="890" cy="1700" r="22" fill="#e0452c" stroke="#fff" stroke-width="6"/><circle cx="720" cy="520" r="22" fill="#e0452c" stroke="#fff" stroke-width="6"/>
+    <g font-family="RB" font-weight="900" font-stretch="75%" font-size="54" fill="#1b1510" stroke="#fff" stroke-width="10" paint-order="stroke"><text x="840" y="1790" text-anchor="middle">RECIFE</text><text x="600" y="460" text-anchor="middle">NOVA AMSTERDÃ</text></g>`),{z:-598,w:1080,h:1920});
+  S.ship=plane(w,ship(.38,4),{x:0,y:0,z:-450,w:175,h:198,shadow:14});
+  S.clouds=plane(w,svg(1400,2600,cloudsBody(1400,2600,14,91,0,2600,170,'#ffffff','#dfe8f2',.85)),{y:960,z:-150,w:1400,h:2600,blur:3});
+  // vila -> skyline
+  S.vill=document.createElement('div');S.vill.className='world';S.world.appendChild(S.vill);
+  plane(S.vill,skySVG(1400,1400,[[0,'#7aa6d8'],[.7,'#f4d2a2'],[1,'#ffe8c4']],[300,1000,70],[8,95,150,800,120,'#fff','#e3d6c8']),{y:640,z:-3000,w:1400,h:1400});
+  S.towers=plane(S.vill,svg(1500,1200,(()=>{let s='';const r=rng(12);let x=0,i=0;while(x<1500){const bw=70+r()*90,bh=380+r()*760;const c=mixc('#6f86a6','#c7d3e0',r());s+=`<g class="tw" data-i="${i++}" style="transform-origin:${x+bw/2}px 1200px"><rect x="${x}" y="${1200-bh}" width="${bw}" height="${bh}" fill="${c}"/><rect x="${x+bw*.8}" y="${1200-bh}" width="${bw*.2}" height="${bh}" fill="#000" opacity=".15"/>${Array.from({length:Math.floor(bh/46)},(_,k)=>`<rect x="${x+8}" y="${1200-bh+16+k*46}" width="${bw-26}" height="14" fill="#fff4d6" opacity="${.25+r()*.5}"/>`).join('')}</g>`;x+=bw+6}return s})()),{y:860,z:-1500,w:1500,h:1200});
+  plane(S.vill,waterSVG(1600,700,'#9cc4d8','#2e5f7e',41,60),{y:1500,z:-1100,w:1600,h:700});
+  S.old=plane(S.vill,svg(1300,600,houseRow(1300,600,61,{hmin:200,hmax:300,wmin:120,wmax:170})+windmill(1000,600,1.1)),{y:1180,z:-900,w:1300,h:600,shadow:18});
+  S.tag=plane(S.vill,`<div style="font-family:RB;font-weight:900;font-stretch:75%;font-size:84px;color:#fff;text-align:center;-webkit-text-stroke:12px #14110f;paint-order:stroke fill">NOVA AMSTERDÃ<br><span style="color:#ffc531">→ NOVA YORK</span></div>`,{y:420,z:-400,w:1000,h:220});
+},(S,t)=>{
+  const mapOn=t<5.2;S.vill.style.display=mapOn?'none':'block';
+  [S.bgo,S.map,S.route,S.ship,S.clouds].forEach(e=>e.style.display=mapOn?'block':'none');
+  if(mapOn){
+    const p=eio(prog(t,.4,4.8));const path=S.route.querySelector('#rt'),L=path.getTotalLength(),pt=path.getPointAtLength(L*p),pt2=path.getPointAtLength(Math.min(L,L*p+5));
+    const rc=S.route.querySelector('#rtc');rc.setAttribute('stroke-dasharray',`${L*p} ${L}`);
+    const s=S.ship._base.s,mb=S.map._base;// mapear ponto do mapa -> posição do navio
+    const X=mb.X+(pt.x-540)*mb.s, Y=mb.Y+(pt.y-960)*mb.s;
+    S.ship.style.transform=`translate3d(${X}px,${Y}px,-450px) scale(${s}) rotate(${Math.atan2(pt2.y-pt.y,pt2.x-pt.x)*0+0}deg) translate(-87px,-170px)`;
+    const cy=lerp(560,-260,p)+ (Y-960)*0;
+    cam(S.world,{x:(pt.x-540)*.75,y:(pt.y-960)*.75,z:kf(t,[[0,300],[2.4,120],[5.2,300]]),rx:6,ry:kf(t,[[0,-6],[5.2,6]])});
+    move(S.clouds,0,-t*80);
+  }else{
+    const u=t-5.2;cam(S.world,{z:kf(u,[[0,0],[3.4,260]]),y:kf(u,[[0,60],[3.4,-40]])});
+    S.vill.style.transform='';
+    S.old.style.opacity=kf(u,[[1.0,1],[1.8,.0]]);
+    S.towers.querySelectorAll('.tw').forEach(g=>{const i=+g.dataset.i;const k=eback(prog(u,.9+i*.035,1.5+i*.035),1.2);g.style.transform=`scaleY(${Math.max(0.001,k)})`});
+    S.tag.style.opacity=kf(u,[[1.6,0],[2.0,1]]);move(S.tag,0,0,0,`scale(${kf(u,[[1.6,.6],[2.1,1]],x=>eback(x))})`);
+  }
+});
+
+// 8. 63 TONELADAS DE OURO
+scene(42.6,48.2,(w,S)=>{
+  plane(w,svg(1400,2000,`<rect width="1400" height="2000" fill="#2a1d14"/><circle cx="700" cy="900" r="900" fill="url(#glow)" opacity=".35"/>${Array.from({length:24},(_,i)=>`<rect x="${(i%6)*240}" y="${Math.floor(i/6)*500}" width="232" height="492" fill="#33241a"/>`).join('')}`),{y:960,z:-1800,w:1400,h:2000});
+  const bars=[];let i=0;for(let row=0;row<7;row++){const n=7-row;for(let k=0;k<n;k++){bars.push([540+(k-(n-1)/2)*176,1500-row*52,i++])}}
+  S.bars=plane(w,svg(1080,1700,bars.map(([x,y,i])=>`<g class="b" data-i="${i}" style="transform-origin:${x}px ${y}px">${goldBar(x,y,1)}</g>`).join('')),{y:960,z:-500,w:1080,h:1700,shadow:30});
+  S.n=bars.length;
+  S.shine=plane(w,svg(1080,1700,`<rect x="-300" y="0" width="160" height="1700" fill="#fff" opacity=".35" transform="skewX(-20)"/>`),{y:960,z:-499,w:1080,h:1700});
+  S.coins=[];const r=rng(3);for(let c=0;c<14;c++)S.coins.push([plane(w,svg(90,90,`<circle cx="45" cy="45" r="40" fill="url(#gold)" stroke="#a8701a" stroke-width="5"/><circle cx="45" cy="45" r="26" fill="none" stroke="#fff3b0" stroke-width="4"/>`),{x:120+r()*840,y:-100,z:-200-r()*400,w:90,h:90,blur:r()<.3?4:0}),r()*1.5,r()]);
+},(S,t)=>{
+  cam(S.world,{z:kf(t,[[0,0],[5.6,280]]),y:kf(t,[[0,180],[5.6,60]]),rx:kf(t,[[0,6],[5.6,2]]),ry:kf(t,[[0,-5],[5.6,4]])});
+  S.bars.querySelectorAll('.b').forEach(g=>{const i=+g.dataset.i;const k=prog(t,.3+i*.085,.55+i*.085);g.style.transform=`translateY(${(1-eout(k))*-500}px)`;g.style.opacity=k>0?1:0});
+  S.shine.querySelector('rect').setAttribute('x',kf(t,[[3.4,-300],[4.6,1500]]));
+  S.coins.forEach(([el,d,s])=>{const u=t-d;move(el,0,u>0?Math.min(2300,u*u*500):0,0,`rotate(${u*200*s}deg)`)});
+});
+
+// 9. FINAL — e se tivessem ficado? Recife holandês de hoje
+scene(48.2,56.2,(w,S)=>{
+  plane(w,skySVG(1500,1400,[[0,'#3c4f92'],[.5,'#d77c86'],[.8,'#ffb27a'],[1,'#ffd9a0']],[540,1000,80],[10,7,150,800,140,'#ffe2d0','#e49a9a',.9]),{y:640,z:-3400,w:1500,h:1400});
+  plane(w,svg(1600,1000,(()=>{let s='';const r=rng(71);let x=0;while(x<1600){const bw=110+r()*80,bh=500+r()*450;s+=house(x,1000,bw,bh,mixc(HOUSE_COLS[Math.floor(r()*10)],'#a0a8c0',.25),Math.floor(r()*3),r,1);x+=bw+10}return s})()),{y:980,z:-2000,w:1600,h:1000,blur:2});
+  plane(w,waterSVG(1700,900,'#e7a780','#2f4f72',23,80),{y:1450,z:-1200,w:1700,h:900});
+  plane(w,svg(1800,700,bridgeSVG(1800,700,240)),{y:1330,z:-1350,w:1800,h:700,op:.95});
+  plane(w,svg(700,1500,houseRow(700,1500,81,{hmin:700,hmax:1050,wmin:210,wmax:260,lit:1})+palm(600,1500,700,-50,1.4)),{x:150,y:930,z:-650,w:700,h:1500,shadow:30});
+  plane(w,svg(700,1500,houseRow(700,1500,83,{hmin:700,hmax:1050,wmin:210,wmax:260,lit:1})+palm(100,1500,650,60,1.3)),{x:930,y:950,z:-700,w:700,h:1500,shadow:30});
+  S.bikes=plane(w,svg(1200,200,Array.from({length:5},(_,i)=>{const x=80+i*240;return`<g><circle cx="${x}" cy="160" r="34" fill="none" stroke="#1d1d22" stroke-width="7"/><circle cx="${x+90}" cy="160" r="34" fill="none" stroke="#1d1d22" stroke-width="7"/><path d="M${x},160 L${x+40},110 L${x+90},160 M${x+40},110 L${x+80},110" stroke="#1d1d22" stroke-width="7" fill="none"/>${person2D(x+46,118,.7,HOUSE_COLS[i],rng(i+2))}</g>`}).join('')),{y:1580,z:-500,w:1200,h:200});
+  S.badge=plane(w,`<div style="display:inline-block;font-family:RB;font-weight:900;font-stretch:75%;font-size:64px;color:#1b1510;background:#ffc531;border:8px solid #1b1510;border-radius:28px;padding:10px 46px;box-shadow:0 14px 0 #1b1510">PORTO DAS AMÉRICAS?</div>`,{y:560,z:-300,w:700,h:170});
+  S.flag=plane(w,svg(260,620,`<line x1="20" y1="620" x2="20" y2="0" stroke="#3a2a1a" stroke-width="10"/><g id="fl9"></g>`),{x:560,y:700,z:-1500,w:260,h:620});
+},(S,t)=>{
+  cam(S.world,{z:kf(t,[[0,0],[8,520]],x=>x),y:kf(t,[[0,60],[8,-40]]),ry:kf(t,[[0,3],[8,-3]])});
+  move(S.bikes,-t*70);S.flag.querySelector('#fl9').innerHTML=dutchFlag(25,8,220,140,Math.sin(t*5)*16);
+  S.badge.style.opacity=kf(t,[[1.2,0],[1.6,1]]);move(S.badge,0,0,0,`scale(${kf(t,[[1.2,.6],[1.8,1]],x=>eback(x))})`);
+});
+
+// ======== CENAS NOVAS (episódio completo) ========
+function plaque(txt,col='#fff',size=400){return `<div style="font-family:RB;font-weight:900;font-stretch:75%;font-size:${size}px;color:${col};opacity:.9;line-height:1;text-align:center">${txt}</div>`}
+function label(txt,size=60,col='#ffe9b0'){return `<div style="font-family:RB;font-weight:900;font-stretch:80%;font-size:${size}px;color:${col};text-align:center;-webkit-text-stroke:9px #14110f;paint-order:stroke fill">${txt}</div>`}
+function engenho(x,base,sc){return `<g transform="translate(${x},${base}) scale(${sc})"><rect x="-120" y="-110" width="240" height="110" fill="#f2ead8"/><polygon points="-135,-110 0,-170 135,-110" fill="#b5523b"/><rect x="60" y="-230" width="34" height="120" fill="#c9b79a"/><rect x="-80" y="-70" width="40" height="70" fill="#5a3726"/><rect x="0" y="-80" width="36" height="34" fill="url(#glass)"/><circle cx="-170" cy="-50" r="60" fill="none" stroke="#6b4529" stroke-width="12"/>${[0,45,90,135].map(a=>`<line x1="-170" y1="-50" x2="${-170+60*Math.cos(a*Math.PI/180)}" y2="${-50+60*Math.sin(a*Math.PI/180)}" stroke="#6b4529" stroke-width="8" transform="rotate(0)"/><line x1="-170" y1="-50" x2="${-170-60*Math.cos(a*Math.PI/180)}" y2="${-50-60*Math.sin(a*Math.PI/180)}" stroke="#6b4529" stroke-width="8"/>`).join('')}</g>`}
+function postLandscape(w,h,paint=0){
+  const c=paint?['#a7b97a','#86a05e','#6a8a4c']:['#8fae6a','#6f9450','#557c3e'];
+  let s=`<rect width="${w}" height="${h}" fill="${paint?'#d9e2d0':'none'}"/>`;
+  if(paint)s+=`<rect width="${w}" height="${h*.55}" fill="#cfdde6"/>`;
+  s+=hills(w,h,c)+engenho(w*.55,h*.74,w/1600)+palm(w*.18,h*.86,h*.42,-w*.02,w/1300)+palm(w*.84,h*.9,h*.36,w*.03,w/1500);
+  return s;
+}
+function painter(){return svg(420,610,sprImg('painter',6,240,400,0,30,600-.94*600,360,600))}
+// pintores
+scene(23.80,27.43,(w,S)=>{
+  plane(w,skySVG(1400,1300,[[0,'#7fb0dc'],[.7,'#e9e2c4'],[1,'#f6e6c0']],[1000,800,60],[8,77,150,700,130,'#fff','#e2e6ea']),{y:700,z:-3200,w:1400,h:1300});
+  plane(w,svg(1700,1100,postLandscape(1700,1100)),{y:1250,z:-1500,w:1700,h:1100,blur:1.5});
+  S.cv=plane(w,svg(640,760,`<line x1="120" y1="760" x2="250" y2="180" stroke="#6b4529" stroke-width="18"/><line x1="520" y1="760" x2="390" y2="180" stroke="#6b4529" stroke-width="18"/><line x1="320" y1="760" x2="320" y2="200" stroke="#5b3d24" stroke-width="14"/><rect x="40" y="70" width="560" height="430" fill="#8a5d3a"/><rect x="62" y="92" width="516" height="386" fill="#f3ead6"/><clipPath id="cvc"><rect id="cvr" x="62" y="92" width="0" height="386"/></clipPath><g clip-path="url(#cvc)"><svg x="62" y="92" width="516" height="386" viewBox="0 0 1700 1100" preserveAspectRatio="none">${postLandscape(1700,1100,1)}</svg></g><rect x="30" y="500" width="580" height="22" fill="#6b4529"/>`),{x:620,y:1120,z:-420,w:640,h:760,shadow:30});
+  S.p=plane(w,painter(),{x:230,y:1230,z:-300,w:420,h:610,shadow:26});
+  S.lbl=plane(w,label('FRANS POST',64),{x:620,y:560,z:-300,w:700,h:90});
+  plane(w,svg(1400,400,`<path d="M0,140 Q300,60 700,120 Q1100,180 1400,100 L1400,400 L0,400 Z" fill="#4e7a3a"/>`),{y:1880,z:-100,w:1400,h:400,blur:5});
+},(S,t)=>{
+  cam(S.world,{x:kf(t,[[0,-40],[3.6,60]]),z:kf(t,[[0,0],[3.6,260]]),ry:kf(t,[[0,-5],[3.6,3]])});
+  S.cv.querySelector('#cvr').setAttribute('width',516*eio(prog(t,.2,3.2)));
+  move(S.p,0,0,0,'');setFrame(S.p,Math.floor(t*5));
+  S.lbl.style.opacity=kf(t,[[.3,0],[.7,1]]);
+});
+// Nassau parte (1644)
+scene(27.43,30.19,(w,S)=>{
+  plane(w,skySVG(1500,1400,[[0,'#45507f'],[.55,'#d98a7a'],[1,'#ffc98a']],[760,1000,70],[10,88,150,800,140,'#ffe0cc','#d99a90',.9]),{y:640,z:-3400,w:1500,h:1400});
+  S.year=plane(w,plaque('1644','#ffe2c0'),{y:560,z:-2500,w:1200,h:440});
+  plane(w,waterSVG(1800,1100,'#e7a780','#2d4a6a',19,90),{y:1500,z:-1400,w:1800,h:1100});
+  S.ship=plane(w,ship(1.0,8),{x:560,y:1180,z:-900,w:460,h:520,shadow:16});
+  plane(w,svg(1400,700,`<rect y="100" width="1400" height="600" fill="#6a4a32"/><rect y="90" width="1400" height="24" fill="#8a6a4a"/>`),{y:1800,z:-400,w:1400,h:700});
+  S.crowd=plane(w,svg(1300,320,crowd(1300,300,14,23,1.5,.9)),{y:1520,z:-380,w:1300,h:320,shadow:12});
+},(S,t)=>{
+  cam(S.world,{z:kf(t,[[0,0],[2.8,220]]),y:kf(t,[[0,-20],[2.8,30]])});
+  move(S.ship,t*50,Math.sin(t*1.6)*6,-t*160);
+  move(S.crowd,0,Math.abs(Math.sin(t*6))*-8);animCrowd(S.crowd,t);
+  S.year.style.opacity=kf(t,[[0,0],[.5,1]]);
+});
+// Guararapes
+// Guararapes (refeita: fileiras em profundidade + câmera baixa entre as tropas)
+function band(w,base,n,seed,col,flag,armsUp,sc=1.6,flags=2){const r=rng(seed);let s='';const ps=[];for(let i=0;i<n;i++)ps.push([40+i*(w-80)/n+r()*24,base+r()*16]);
+  ps.sort((a,b)=>a[1]-b[1]).forEach(([x,y])=>{if(flag){const k=.56*sc*(.92+r()*.16),ww=240*k,hh=520*k;s+=sprImg('sold'+Math.floor(r()*3),1,240,520,0,x-ww/2,y-hh*.975,ww,hh)}else s+=person(x,y,sc*(.92+r()*.16),'',r,armsUp&&r()<.75)});
+  for(let k=0;k<flags;k++){const x=w*(.2+k*.5)+r()*40;s+=`<line x1="${x}" y1="${base}" x2="${x}" y2="${base-280*sc}" stroke="#3a2a1a" stroke-width="${5*sc}"/>`+(flag?dutchFlag(x+3,base-280*sc,80*sc,50*sc,4):`<path d="M${x+3},${base-280*sc} L${x+90*sc},${base-266*sc} L${x+3},${base-236*sc} Z" fill="#f4f0e6"/>`)}return s}
+function smokeSVG(){return svg(400,400,`<circle cx="200" cy="200" r="160" fill="#efe7dc" opacity=".8"/><circle cx="150" cy="160" r="110" fill="#fff" opacity=".65"/><circle cx="270" cy="230" r="90" fill="#e2d8cc" opacity=".6"/>`)}
+scene(32.14,39.94,(w,S)=>{
+  plane(w,skySVG(1600,1400,[[0,'#56688f'],[.6,'#d7ae86'],[1,'#f3d6a6']],[300,900,60],[12,99,150,800,150,'#fff3e6','#cdb7a8']),{y:620,z:-3400,w:1600,h:1400});
+  S.year=plane(w,plaque('1648','#fff4dc'),{y:330,z:-2700,w:1200,h:440});
+  plane(w,svg(1900,900,hills(1900,900,['#8aa46e','#7a9a60'])),{y:1120,z:-2200,w:1900,h:900,blur:2.5,op:.9});
+  plane(w,svg(1900,900,hills(1900,900,['#6d9156'])),{y:1260,z:-1600,w:1900,h:900,blur:1});
+  S.du=[];[[-1500,.8,11,2],[-1300,.9,13,1],[-1100,1.0,17,2]].forEach(([z,sc,sd,fl],i)=>S.du.push(plane(w,svg(1000,460,band(1000,440,8,sd,['#26324f','#2b3a5c','#33415f'],1,0,sc*1.3,fl)),{x:800,y:1110+i*25,z,w:1000,h:460,blur:i==0?1.5:0,op:i==0?.85:1})));
+  plane(w,svg(1900,900,hills(1900,900,['#5a8446'])),{y:1500,z:-950,w:1900,h:900});
+  S.sm=[];[[-1400,300,1100,6],[-1200,820,1080,8],[-900,520,1150,8],[-600,200,1250,10],[-250,900,1350,14]].forEach(([z,x,y,b])=>S.sm.push(plane(w,smokeSVG(),{x,y,z,w:400,h:400,blur:b})));
+  S.rb=[];[[-850,1.0,21,2],[-650,1.15,25,1],[-450,1.3,29,2]].forEach(([z,sc,sd,fl],i)=>S.rb.push(plane(w,svg(1100,520,band(1100,500,8,sd,['#c8553d','#f1e3c3','#8c3b3b','#e3a33b','#5f9a52','#3e6e8f'],0,1,sc*1.4,fl)),{x:330,y:1380+i*40,z,w:1100,h:520,shadow:16})));
+  S.fg=plane(w,svg(1500,700,band(1500,680,6,41,['#c8553d','#8c3b3b','#e3a33b','#5f9a52'],0,1,3.4,1)),{x:360,y:1760,z:-140,w:1500,h:700,blur:7});
+  S.dust=plane(w,svg(1400,2000,(()=>{let s='';const r=rng(17);for(let i=0;i<120;i++)s+=`<circle cx="${r()*1400}" cy="${r()*2000}" r="${2+r()*5}" fill="#fff2d8" opacity="${.3+r()*.5}"/>`;return s})()),{y:960,z:-300,w:1400,h:2000,blur:1});
+},(S,t)=>{
+  cam(S.world,{x:kf(t,[[0,-160],[7.8,140]]),y:kf(t,[[0,140],[7.8,60]]),z:kf(t,[[0,0],[7.8,560]],x=>x),rx:kf(t,[[0,-5],[7.8,-2]]),ry:kf(t,[[0,7],[7.8,-5]])});
+  S.rb.forEach((e,i)=>move(e,kf(t,[[0,-140],[7.8,260+i*40]]),-Math.abs(Math.sin(t*5+i))*10));
+  move(S.fg,kf(t,[[0,-300],[7.8,200]]),-Math.abs(Math.sin(t*4))*14);animCrowd(S.fg,t);S.rb.forEach(e=>animCrowd(e,t));
+  S.du.forEach((e,i)=>{move(e,kf(t,[[2.5,0],[7.8,380+i*40]]),0);e.style.opacity=kf(t,[[4.5,i==0?.85:1],[7.8,.2]])});
+  S.sm.forEach((e,i)=>{const p=((t*.18+i*.21)%1);move(e,p*80,-p*90,0,`scale(${.7+p*.8})`);e.style.opacity=Math.sin(p*Math.PI)*.42});
+  move(S.dust,t*20,-t*40);S.year.style.opacity=kf(t,[[0,0],[.5,1]]);
+});
+
+// ======== MAPA REAL (lat/lon -> projeção equirretangular) ========
+const BR=[[3.8,-51.8],[2.5,-50.9],[1.6,-49.9],[0.0,-50.4],[-0.5,-48.6],[-1.45,-48.5],[-0.7,-47.4],[-1.1,-46.1],[-1.5,-44.9],[-2.53,-44.3],[-2.6,-43.4],[-2.9,-41.8],[-3.0,-40.0],[-3.73,-38.52],[-4.7,-37.3],[-5.1,-36.0],[-5.48,-35.26],[-7.12,-34.86],[-8.05,-34.9],[-9.0,-35.1],[-9.67,-35.7],[-10.9,-37.07],[-12.0,-37.7],[-12.97,-38.5],[-13.9,-38.95],[-14.8,-39.03],[-16.45,-39.06],[-17.9,-39.4],[-18.35,-39.67],[-19.6,-39.8],[-20.3,-40.3],[-21.3,-40.95],[-22.0,-41.0],[-22.9,-42.0],[-22.95,-43.2],[-23.0,-44.3],[-23.96,-46.33],[-24.7,-47.5],[-25.5,-48.5],[-26.3,-48.6],[-27.6,-48.5],[-28.6,-48.8],[-30.0,-50.1],[-31.3,-51.0],[-32.2,-52.1],[-33.7,-53.4],
+ [-32.5,-53.6],[-31.4,-55.0],[-30.2,-57.6],[-29.2,-56.8],[-27.4,-55.6],[-25.6,-54.6],[-24.1,-54.3],[-23.9,-55.4],[-22.6,-55.7],[-22.1,-57.9],[-20.2,-58.2],[-17.6,-57.7],[-16.3,-58.4],[-15.4,-60.2],[-13.5,-61.6],[-12.5,-63.5],[-11.9,-65.0],[-10.8,-65.4],[-9.9,-66.6],[-10.9,-68.7],[-11.0,-70.5],[-9.5,-72.7],[-8.5,-73.5],[-7.4,-73.9],[-6.0,-73.1],[-4.4,-70.2],[-4.2,-69.95],[-1.1,-69.4],[1.2,-69.8],[1.9,-67.3],[1.0,-66.8],[0.8,-65.6],[1.6,-64.0],[2.5,-63.4],[4.0,-62.9],[4.5,-61.0],[5.2,-60.2],[4.0,-59.6],[2.3,-59.9],[1.3,-58.6],[1.9,-56.2],[2.3,-54.6],[2.4,-52.9],[3.8,-51.8]];
+const REST=[[-33.7,-53.4],[-34.9,-56.2],[-34.6,-58.4],[-36.3,-56.8],[-38.5,-58.0],[-41.0,-63.0],[-42.8,-64.3],[-46.0,-67.5],[-50.0,-68.7],[-52.3,-68.4],[-54.9,-67.5],[-55.6,-68.5],[-53.5,-73.5],[-48.0,-75.6],[-41.5,-73.8],[-37.0,-73.5],[-33.0,-71.6],[-27.0,-70.8],[-18.5,-70.3],[-15.5,-75.0],[-12.0,-77.1],[-6.0,-81.1],[-3.5,-80.3],[-2.2,-80.9],[0.9,-80.0],[1.8,-78.9],[7.0,-77.8],[8.7,-77.4],[9.4,-75.6],[11.0,-74.8],[11.7,-72.2],[10.6,-71.6],[11.4,-70.0],[10.5,-66.9],[10.6,-62.5],[8.6,-60.0],[6.8,-58.2],[6.0,-57.1],[5.85,-55.2],[5.7,-54.0],[4.9,-52.3],[3.8,-51.8],...[...BR].reverse().slice(1)];
+const SUR=[[6.0,-57.1],[5.85,-55.2],[5.7,-54.0],[4.0,-54.4],[2.4,-54.6],[1.9,-56.2],[2.7,-56.8],[4.0,-58.0],[5.0,-57.3]];
+const NEB=[[-1.1,-46.1],[-2.5,-46.6],[-4.0,-47.5],[-5.4,-48.4],[-6.4,-47.4],[-7.6,-46.9],[-9.0,-46.3],[-10.3,-45.9],[-11.2,-46.3],[-13.3,-46.3],[-14.7,-45.9],[-15.2,-44.3],[-15.9,-41.5],[-17.2,-40.2],[-18.35,-39.67],[-19,-30],[2,-30],[2,-46.1]];
+const GX=lon=>540+(lon+57.5)*21*0.978, GY=lat=>860-(lat+12)*21;
+const gp=pts=>pts.map(([la,lo])=>`${GX(lo).toFixed(1)},${GY(la).toFixed(1)}`).join(' ');
+function realMap(){
+  const g=`<rect width="1080" height="1920" fill="url(#ocean)"/>`+Array.from({length:14},(_,i)=>`<line x1="0" y1="${i*140}" x2="1080" y2="${i*140}" stroke="#fff" stroke-opacity=".06" stroke-width="3"/>`).join('')+Array.from({length:8},(_,i)=>`<line x1="${i*140}" y1="0" x2="${i*140}" y2="1920" stroke="#fff" stroke-opacity=".06" stroke-width="3"/>`).join('');
+  return g+`<clipPath id="neclip"><polygon points="${gp(NEB)}"/></clipPath>
+  <polygon points="${gp(REST)}" fill="#cbbf9a" transform="translate(0,10)" opacity=".6"/><polygon points="${gp(REST)}" fill="#e3d6b0"/>
+  <polygon points="${gp(BR)}" fill="#b8a77a" transform="translate(0,12)"/><polygon points="${gp(BR)}" fill="#a9cc84" stroke="#f4f0e2" stroke-width="3"/>
+  <g clip-path="url(#neclip)"><polygon points="${gp(BR)}" fill="#4a5a3a"/></g>
+  <polygon points="${gp(SUR)}" fill="#f08a24" stroke="#fff" stroke-width="4"/>
+  <g font-family="RB" font-weight="900" font-stretch="75%" fill="#1b1510" stroke="#fff" stroke-width="9" paint-order="stroke"><text x="${GX(-55.8)}" y="${GY(8.2)}" text-anchor="middle" font-size="46">SURINAME</text><text x="${GX(-52)}" y="${GY(-12)}" text-anchor="middle" font-size="64">BRASIL</text></g>`;
+}
+function nePiece(){
+  return `<clipPath id="neclip2"><polygon points="${gp(NEB)}"/></clipPath><g clip-path="url(#neclip2)"><polygon points="${gp(BR)}" fill="#3b2a1a" opacity=".35" transform="translate(12,24)"/><polygon points="${gp(BR)}" fill="#f08a24" stroke="#fff" stroke-width="6"/></g>
+  <circle cx="${GX(-34.9)}" cy="${GY(-8.05)}" r="11" fill="#fff" stroke="#1b1510" stroke-width="4"/>
+  <g font-family="RB" font-weight="900" font-stretch="75%" fill="#fff" stroke="#14110f" stroke-width="10" paint-order="stroke"><text x="${GX(-41.6)}" y="${GY(-10.2)}" text-anchor="middle" font-size="46">NORDESTE</text><text x="${GX(-41.6)}" y="${GY(-10.2)+42}" text-anchor="middle" font-size="32">(holandês?)</text><text x="${GX(-34.9)-16}" y="${GY(-8.05)+10}" text-anchor="end" font-size="30">Recife</text></g>`;
+}
+
+// E se tivessem ficado? Nordeste como outro país + Suriname
+const SA_PTS=[[330,260],[520,230],[640,290],[760,300],[850,340],[930,420],[1010,560],[1040,700],[990,860],[930,1000],[860,1120],[780,1230],[700,1330],[620,1460],[560,1560],[500,1700],[430,1850],[380,1800],[350,1600],[330,1400],[300,1150],[250,900],[200,700],[180,560],[230,420]];
+const NE_PTS=[[850,440],[930,420],[1010,560],[1040,700],[990,860],[930,960],[820,930],[770,770],[790,560]];
+const SU_PTS=[[745,302],[800,312],[808,385],[770,398],[748,350]];
+const poly=(p,f,st='')=>`<polygon points="${p.map(q=>q.join(',')).join(' ')}" fill="${f}" ${st}/>`;
+scene(51.43,57.17,(w,S)=>{
+  plane(w,svg(3000,4000,`<rect width="3000" height="4000" fill="#1d5070"/>`),{z:-1500,w:3000,h:4000});
+  plane(w,svg(1080,1920,realMap()),{z:-600,w:1080,h:1920});
+  S.ne=plane(w,svg(1080,1920,nePiece()),{z:-600,w:1080,h:1920});
+  S.clouds=plane(w,svg(1400,2400,cloudsBody(1400,2400,10,57,0,2400,160,'#ffffff','#dfe8f2',.75)),{y:960,z:-200,w:1400,h:2400,blur:4});
+  S.flag=plane(w,svg(240,160,dutchFlag(10,10,220,140,0)),{x:GX(-42),y:GY(2.2),z:-300,w:240,h:160,shadow:14});
+},(S,t)=>{
+  const cx=GX(-41)-540,cy=GY(-8)-960;
+  cam(S.world,{x:kf(t,[[0,0],[3,cx*.7],[5.7,cx*.75]]),y:kf(t,[[0,-150],[3,cy*.7],[5.7,cy*.7-60]]),z:kf(t,[[0,-260],[3,360],[5.7,420]]),rx:kf(t,[[0,0],[3,14],[5.7,12]]),ry:kf(t,[[0,0],[3,-8],[5.7,4]])});
+  const l=eout(prog(t,1.2,2.4));move(S.ne,0,-l*40,l*200);
+  move(S.clouds,0,-t*60);
+  S.flag.style.opacity=prog(t,1.8,2.3);S.flag.querySelector('svg').innerHTML=dutchFlag(10,10,220,140,Math.sin(t*5)*12);
+});
+// Ironia 1667: troca Nova Amsterdã <-> Suriname; perderam o Recife e Nova York
+function card(title,body,col){return svg(440,600,`<rect x="0" y="0" width="440" height="600" rx="26" fill="#fbf3df"/><rect x="18" y="18" width="404" height="470" rx="16" fill="${col}"/><svg x="18" y="18" width="404" height="470" viewBox="0 0 1000 1160" preserveAspectRatio="xMidYMid slice">${body}</svg><text x="220" y="560" text-anchor="middle" font-family="RB" font-weight="900" font-stretch="75%" font-size="56" fill="#1b1510">${title}</text>`)}
+scene(65.25,75.52,(w,S)=>{
+  plane(w,svg(1800,2400,`<rect width="1800" height="2400" fill="#3a2a1e"/>${Array.from({length:12},(_,i)=>`<rect x="0" y="${i*200}" width="1800" height="8" fill="#2e2117"/>`).join('')}<circle cx="900" cy="900" r="900" fill="url(#glow)" opacity=".35"/>`),{y:960,z:-2600,w:1800,h:2400});
+  S.mapw=plane(w,svg(1300,900,`<rect width="1300" height="900" rx="20" fill="#e9dcc0"/><rect x="30" y="30" width="1240" height="840" fill="none" stroke="#b99a6a" stroke-width="6"/>${Array.from({length:30},(_,i)=>`<circle cx="${(i*373)%1300}" cy="${(i*577)%900}" r="${80+(i%5)*30}" fill="#d9c7a2" opacity=".35"/>`).join('')}<path d="M200,300 Q400,200 600,320 T1000,280" stroke="#b99a6a" stroke-width="5" fill="none" stroke-dasharray="20 14"/>`),{y:820,z:-1700,w:1300,h:900,blur:2.5});
+  S.candle=plane(w,svg(300,500,`<circle cx="150" cy="120" r="140" fill="url(#lamp)"/><rect x="120" y="170" width="60" height="300" rx="10" fill="#f3ead6"/><path d="M150,100 Q175,140 150,170 Q125,140 150,100 Z" fill="#ffcf5a"/><rect x="80" y="460" width="140" height="30" rx="12" fill="#c8963f"/>`),{x:930,y:1150,z:-1100,w:300,h:500,blur:1.5});
+  S.year=plane(w,plaque('1667','#e2b878',300),{y:260,z:-1300,w:1000,h:330});
+  S.sub=plane(w,label('1667 · TRATADO DE BREDA',54,'#fff'),{y:470,z:-500,w:800,h:80});
+  const ny=`<rect width="1000" height="1160" fill="#cfe0ee"/>${houseRow(1000,1160,61,{hmin:300,hmax:520,wmin:180,wmax:240})}${windmill(800,1160,1.6)}`;
+  const su=`<rect width="1000" height="1160" fill="#cfe6d6"/><path d="M0,800 Q300,700 500,780 Q700,860 1000,760 L1000,1160 L0,1160 Z" fill="#4a8a5a"/><path d="M0,980 Q400,900 1000,1000 L1000,1060 Q400,960 0,1040 Z" fill="#5aa0c8"/>${palm(200,900,420,-30,1.4)}${palm(760,880,460,40,1.5)}${palm(470,840,360,10,1.1)}`;
+  const re=`<rect width="1000" height="1160" fill="#f6d6b0"/>${houseRow(1000,1160,5,{hmin:420,hmax:700,wmin:200,wmax:260})}${palm(860,1160,520,-40,1.4)}`;
+  S.ny=plane(w,card('NOVA AMSTERDÃ',ny,'#cfe0ee'),{x:300,y:960,z:-620,w:440,h:600,shadow:40});
+  S.su=plane(w,card('SURINAME',su,'#cfe6d6'),{x:780,y:960,z:-520,w:440,h:600,shadow:40});
+  S.re=plane(w,card('RECIFE',re,'#f6d6b0'),{x:540,y:900,z:-200,w:440,h:600,shadow:44});
+  S.fl=plane(w,svg(240,160,dutchFlag(10,10,220,140,0)),{x:300,y:600,z:-560,w:240,h:160,shadow:12});
+  S.en=plane(w,label('INGLATERRA',56,'#ffd7d0'),{x:300,y:610,z:-470,w:500,h:90});
+  S.table=plane(w,svg(1800,800,`<rect width="1800" height="800" fill="#7a5233"/><rect width="1800" height="40" fill="#9a6a43"/>${Array.from({length:14},(_,i)=>`<rect x="0" y="${60+i*52}" width="1800" height="4" fill="#6b4529" opacity=".6"/>`).join('')}`),{y:1640,z:-450,w:1800,h:800});
+  S.quill=plane(w,svg(500,700,`<path d="M120,680 Q200,400 420,60 Q360,300 160,670 Z" fill="#f4efe4"/><path d="M130,690 L420,60" stroke="#c9b79a" stroke-width="6"/><ellipse cx="380" cy="600" rx="110" ry="40" fill="#1d1712"/><rect x="290" y="480" width="180" height="120" rx="20" fill="#2a3a4a"/>`),{x:930,y:1700,z:-120,w:500,h:700,blur:7});
+},(S,t)=>{
+  cam(S.world,{x:kf(t,[[0,-60],[10.3,60]]),z:kf(t,[[0,0],[10.3,260]]),ry:kf(t,[[0,-7],[10.3,6]]),rx:kf(t,[[0,4],[10.3,1]]),y:kf(t,[[0,-30],[10.3,20]])});
+  const k=eio(prog(t,1.6,3.4));const arc=Math.sin(k*Math.PI)*300;
+  move(S.ny,k*480*1.39,0,arc+k*100,`rotate(${-k*4}deg)`);move(S.su,-k*480*1.33,0,arc*.6-k*100,`rotate(${k*4}deg)`);
+  S.fl.querySelector('svg').innerHTML=dutchFlag(10,10,220,140,Math.sin(t*5)*12);
+  S.en.style.opacity=kf(t,[[3.2,0],[3.7,1],[7.5,1],[8.2,0]]);move(S.en,480*1.31,0,0);
+  S.re.style.opacity=kf(t,[[5.6,0],[5.9,1],[6.5,1],[7.1,0]]);
+  move(S.re,0,kf(t,[[5.6,80],[5.9,0],[6.2,0],[7.1,900]]),0,`rotate(${kf(t,[[6.2,0],[7.1,25]])}deg)`);
+  if(t>7.6){const g=eio(prog(t,7.6,9.0));move(S.ny,480*1.39+g*700,-g*200,arc+100,`rotate(${g*10}deg)`);S.ny.style.filter=`grayscale(${g}) drop-shadow(0 20px 40px rgba(30,15,0,.45))`}
+  S.year.style.opacity=kf(t,[[0,0],[.5,1]]);S.sub.style.opacity=kf(t,[[.3,0],[.8,1]]);
+});
+
+// Seleção de laranja
+function player(){return svg(400,880,sprImg('player',8,300,500,0,-30,860-.94*767,460,767))}
+scene(72.11,76.4,(w,S)=>{
+  plane(w,svg(1600,1500,`<rect width="1600" height="1500" fill="url(#ns2)"/><circle cx="300" cy="300" r="260" fill="url(#glow)"/><circle cx="1300" cy="300" r="260" fill="url(#glow)"/>`,`<linearGradient id="ns2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#0d1230"/><stop offset="1" stop-color="#2a3266"/></linearGradient>`),{y:600,z:-3000,w:1600,h:1500});
+  plane(w,svg(1800,700,(()=>{let s=`<rect y="200" width="1800" height="500" fill="#1f2446"/>`;const r=rng(9);for(let i=0;i<900;i++)s+=`<circle cx="${r()*1800}" cy="${220+r()*470}" r="${5+r()*5}" fill="${r()<.75?'#f08a24':'#ffffff'}" opacity="${.6+r()*.4}"/>`;return s})()),{y:1000,z:-1800,w:1800,h:700,blur:1.5});
+  plane(w,svg(1800,900,`<rect width="1800" height="900" fill="#3f8f3f"/>${Array.from({length:9},(_,i)=>`<rect x="${i*200}" y="0" width="100" height="900" fill="#4aa04a"/>`).join('')}<circle cx="900" cy="300" r="160" fill="none" stroke="#fff" stroke-width="10" opacity=".8"/><line x1="0" y1="300" x2="1800" y2="300" stroke="#fff" stroke-width="10" opacity=".8"/>`),{y:1550,z:-1200,w:1800,h:900});
+  S.pl=plane(w,player(),{x:540,y:1150,z:-500,w:400,h:880,shadow:30});
+  S.ball=plane(w,svg(120,120,`<circle cx="60" cy="60" r="54" fill="#fff" stroke="#1d1d22" stroke-width="5"/><polygon points="60,38 80,52 72,76 48,76 40,52" fill="#1d1d22"/>`),{x:700,y:1560,z:-450,w:120,h:120,shadow:10});
+  S.conf=plane(w,svg(1200,2200,(()=>{let s='';const r=rng(13);for(let i=0;i<160;i++)s+=`<rect x="${r()*1200}" y="${r()*2200}" width="${14+r()*10}" height="${24+r()*12}" fill="${['#f08a24','#ffffff','#2a4f9a'][i%3]}" transform="rotate(${r()*180} ${r()*1200} ${r()*2200})"/>`;return s})()),{y:0,z:-250,w:1200,h:2200,blur:1});
+  S.fade=plane(w,`<div style="width:3000px;height:4000px;background:#000"></div>`,{z:200,w:3000,h:4000});
+},(S,t)=>{
+  cam(S.world,{z:kf(t,[[0,0],[4.3,260]]),y:kf(t,[[0,60],[4.3,-40]]),ry:kf(t,[[0,6],[4.3,-4]])});
+  move(S.pl,0,-Math.abs(Math.sin(t*4))*30);setFrame(S.pl,Math.floor(t*8));move(S.ball,0,-Math.abs(Math.sin(t*4+1))*60);
+  move(S.conf,0,(t*420)%1100);
+  S.fade.style.opacity=prog(t,3.7,4.3);
+});
+// ---- remapeamento da linha do tempo (áudio real)
+const ORD=[0,1,2,3,4,9,10,11,5,6,7,12,8,13,14];const NEWB=[[0, 3.49], [3.49, 9.58], [9.58, 14.81], [14.81, 21.37], [21.37, 25.58], [25.58, 28.72], [28.72, 32.14], [32.14, 39.94], [39.94, 43.46], [43.46, 50.2], [50.2, 54.83], [54.83, 60.58], [60.58, 65.25], [65.25, 75.52], [75.52, 79.4]];NEWB.forEach((b,i)=>{SCENES[ORD[i]].t0=b[0];SCENES[ORD[i]].t1=b[1]});SCENES.sort((a,b)=>a.t0-b.t0);
+
+// ---------- legendas (palavra a palavra, *destaque*, ~vermelho~)
+const LINES=[[0.0, 3.49, "E se os holandeses *nunca* tivessem saído do *Nordeste?*", [0.02, 0.15, 0.35, 0.55, 1.27, 1.67, 2.26, 2.65, 2.85]], [3.49, 9.58, "Em *1630,* uma frota holandesa chegou a Pernambuco com mais de *7 mil* homens.", [3.51, 3.7, 5.22, 5.48, 5.86, 6.49, 6.94, 7.06, 7.76, 8.01, 8.33, 8.52, 8.84, 9.09]], [9.58, 14.81, "Sete anos depois, chegou *Maurício de Nassau,* e ele transformou o Recife.", [9.6, 9.93, 10.26, 10.79, 11.41, 12.01, 12.21, 12.98, 13.11, 13.37, 14.17, 14.3]], [14.81, 17.68, "Construiu a *primeira grande ponte* do Brasil...", [14.83, 15.44, 15.56, 16.11, 16.54, 16.91, 17.09]], [17.68, 21.37, "e, diz a lenda, fez um *boi voar* na inauguração.", [17.7, 17.92, 18.21, 18.36, 18.87, 19.35, 19.57, 19.86, 20.22, 20.44]], [21.37, 25.58, "Teve *observatório astronômico,* a *primeira sinagoga* das Américas,", [21.39, 21.7, 22.49, 23.51, 23.64, 24.19, 24.74, 24.99]], [25.58, 28.72, "e pintores como *Frans Post* retratando o Brasil.", [25.6, 25.73, 26.32, 26.65, 27.04, 27.37, 28.09, 28.22]], [28.72, 32.14, "Mas Nassau *voltou pra Europa,* e veio a revolta.", [28.74, 29.01, 29.47, 29.93, 30.2, 30.73, 31.1, 31.43, 31.56]], [32.14, 39.94, "Nas Batalhas dos *Guararapes,* portugueses, indígenas e negros, com Henrique Dias e Filipe Camarão, *derrotaram* os holandeses.", [32.16, 32.4, 32.94, 33.18, 33.9, 34.87, 35.47, 35.59, 36.07, 36.47, 37.01, 37.31, 37.43, 37.85, 38.4, 39.06, 39.24]], [39.94, 43.46, "Em *1654,* eles foram ~expulsos.~", [39.96, 40.14, 42.25, 42.54, 42.89]], [43.46, 48.04, "*23 judeus* do Recife fugiram para uma vila chamada *Nova Amsterdã.*", [43.48, 44.27, 44.7, 44.88, 45.31, 45.8, 46.11, 46.35, 46.66, 47.14, 47.45]], [48.04, 50.2, "Hoje, ela se chama *Nova York.*", [48.06, 48.46, 48.88, 49.08, 49.49, 49.82]], [50.2, 54.83, "E Portugal ainda pagou o equivalente a *63 toneladas* de ouro.", [50.22, 50.35, 50.91, 51.28, 51.66, 51.78, 52.54, 52.66, 53.66, 54.29, 54.47]], [54.83, 56.64, "E se eles tivessem *ficado?*", [54.85, 54.98, 55.19, 55.52, 56.12]], [56.64, 60.58, "O Nordeste provavelmente seria *outro país,* como o *Suriname.*", [56.66, 56.79, 57.38, 58.3, 58.7, 59.09, 59.48, 59.81, 59.94]], [60.58, 65.25, "E o Recife podia ter virado o *grande porto* das Américas, no lugar de Nova York.", [60.6, 60.72, 60.83, 61.24, 61.59, 61.83, 62.23, 62.35, 62.76, 63.11, 63.34, 63.93, 64.1, 64.45, 64.63, 64.92]], [65.25, 71.64, "A ironia: em *1667,* os holandeses *trocaram* Nova Amsterdã pelo *Suriname.*", [65.27, 65.39, 65.88, 66.31, 68.49, 68.67, 69.34, 69.89, 70.2, 70.75, 71.05]], [71.64, 73.03, "Perderam o *Recife...*", [71.66, 72.26, 72.39]], [73.03, 75.52, "e ainda abriram mão de *Nova York.*", [73.05, 73.2, 73.64, 74.22, 74.51, 74.73, 75.1]], [75.52, 77.09, "E a seleção desse país?", [75.54, 75.67, 75.8, 76.33, 76.72]], [77.09, 78.4, "Ia jogar de *laranja.*", [77.11, 77.3, 77.67, 77.86]]];
+const CHUNKS=[];
+LINES.forEach(([a,b,txt,wt])=>{
+  const toks=txt.split(' ');let mode='';const words=toks.map(tk=>{let k=mode;if(tk.startsWith('*')){k='h';tk=tk.slice(1)}if(tk.startsWith('~')){k='r';tk=tk.slice(1)}let end=false;if(tk.endsWith('*')||tk.endsWith('~')){end=true;tk=tk.slice(0,-1)}else if(tk.endsWith('*,')||tk.endsWith('*.')||tk.endsWith('*?')){end=true;tk=tk.slice(0,-2)+tk.slice(-1);} mode=end?'':k;return{t:tk,k}});
+  words.forEach((w,i)=>{w.at=wt[i]});
+  let cur=[];const flush=()=>{if(cur.length)CHUNKS.push(cur);cur=[]};
+  words.forEach((w,i)=>{cur.push(w);const len=cur.reduce((s,x)=>s+x.t.length+1,0);const brk=/[.,?!…]$/.test(w.t);const nxt=words[i+1];if(!/^\d+$/.test(w.t)&&!(nxt&&/^\d/.test(w.t)&&nxt.t==='mil')&&(len>26||(brk&&len>8)||/[?!.…]$/.test(w.t)))flush()});flush();
+});
+CHUNKS.forEach((c,i)=>{c.t0=c[0].at;c.t1=i+1<CHUNKS.length?Math.min(CHUNKS[i+1][0].at,c[c.length-1].at+1.6):c[c.length-1].at+1.6});
+let curChunk=null;const capEl=document.getElementById('cap');
+function updCaps(T){
+  const c=CHUNKS.find(c=>T>=c.t0&&T<c.t1)||null;
+  if(c!==curChunk){curChunk=c;capEl.innerHTML=c?c.map(w=>`<span class="${w.k}">${w.t}</span>`).join(' '):''}
+  if(c){const p=prog(T,c.t0,c.t0+.12),q=1-prog(T,c.t1-.08,c.t1);capEl.style.opacity=Math.min(p,q);capEl.style.transform=`translateY(${(1-eout(p))*10}px)`}
+}
+// HUD contadores
+const tagEl=document.getElementById('hudTag'),numEl=document.getElementById('hudNum');
+function fmt(n){return Math.round(n).toLocaleString('pt-BR')}
+function hud(T){
+  let tag='',num='',a=0;
+  if(T>=7.0&&T<9.5){tag='HOMENS';num=fmt(7280*eout(prog(T,7.1,8.8)));a=prog(T,7.0,7.3)}
+  else if(T>=32.3&&T<35.8){tag='BATALHAS DOS GUARARAPES';num='';a=prog(T,32.3,32.6)}
+  else if(T>=43.6&&T<46.6){tag='FUGIRAM DO RECIFE';num=fmt(23*eout(prog(T,43.8,44.9)))+'<small>judeus</small>';a=prog(T,43.6,43.9)}
+  else if(T>=52.3&&T<54.85){tag='EM OURO';num=fmt(63*eout(prog(T,52.4,53.9)))+'<small>toneladas</small>';a=prog(T,52.3,52.6)}
+  document.getElementById('hud').style.opacity=a;tagEl.textContent=tag;numEl.innerHTML=num;
+  document.getElementById('hud').style.transform=`scale(${a>0?eback(a):1})`;
+}
+// ---------- tempo global
+const XF=.35;
+window.setT=function(T){
+  SCENES.forEach((S,i)=>{
+    const on=T>=S.t0-(i?0:0)&&T<S.t1+XF;
+    S.world.style.display=on?'block':'none';
+    if(on){S.update(S,(T-S.t0)*S.od/(S.t1-S.t0));
+      const next=SCENES[i+1];S.world.style.opacity=next&&T>=S.t1?1-prog(T,S.t1,S.t1+XF):1;S.world.style.zIndex=SCENES.length-i}
+  });
+  // a cena nova fica atrás e a antiga dissolve por cima
+  SCENES.forEach((S,i)=>{if(S.world.style.display==='block'){const prev=SCENES[i-1];S.world.style.zIndex=(prev&&T<prev.t1+XF&&T>=S.t0)?1:2}});
+  SCENES.forEach((S,i)=>{const next=SCENES[i+1];if(next&&T>=S.t1&&T<S.t1+XF){S.world.style.zIndex=3}});
+  document.getElementById('grain').style.backgroundPosition=`${(T*977)%512}px ${(T*613)%512}px`;
+  document.getElementById('flash').style.opacity=0;
+  updCaps(T);hud(T);
+};
+
+window.SCENE_BOUNDS=SCENES.map(s=>[s.t0,s.t1]);window.DURATION=79.4;
+</script></body></html>
