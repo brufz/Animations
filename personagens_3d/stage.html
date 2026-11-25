@@ -33,12 +33,20 @@ function aim(b,c,dirW,w){X0.obj.updateMatrixWorld(true);b.getWorldPosition(_v);c
   const q=new THREE.Quaternion().setFromUnitVectors(cur,dirW.clone().normalize());q.slerp(new THREE.Quaternion(),1-w);
   const wq=b.getWorldQuaternion(new THREE.Quaternion());const nw=q.multiply(wq);b.parent.getWorldQuaternion(_p);b.quaternion.copy(_p.invert().multiply(nw));}
 let X0;
+// mão reta em relação ao antebraço e palma virada para a frente
+function palm(X,sd,H,loc,w){X.obj.traverse(o=>{if(o.isBone&&o.userData.r&&new RegExp(sd+'Hand(Thumb|Index|Middle|Ring|Pinky)').test(o.name))o.quaternion.slerp(o.userData.r[1],w*(/Thumb/.test(o.name)?.6:.9))});const kid=bone(X,sd+'HandMiddle1'),i1=bone(X,sd+'HandIndex1'),p1=bone(X,sd+'HandPinky1'),FA=bone(X,sd+'ForeArm');if(!kid||!i1||!p1)return;
+  X0.obj.updateMatrixWorld(true);const pf=FA.getWorldPosition(new THREE.Vector3()),ph=H.getWorldPosition(new THREE.Vector3());aim(H,kid,ph.clone().sub(pf),w);
+  X0.obj.updateMatrixWorld(true);const h=H.getWorldPosition(new THREE.Vector3()),m=kid.getWorldPosition(new THREE.Vector3()).sub(h).normalize();
+  const a=i1.getWorldPosition(new THREE.Vector3()).sub(h),b=p1.getWorldPosition(new THREE.Vector3()).sub(h);let n=new THREE.Vector3().crossVectors(a,b).normalize();if(sd==='Left')n.negate();if(window.PALMSIGN)n.negate();
+  const f=loc(0,0,1);const pn=n.clone().sub(m.clone().multiplyScalar(n.dot(m))).normalize(),pfw=f.clone().sub(m.clone().multiplyScalar(f.dot(m))).normalize();
+  let ang=Math.acos(Math.max(-1,Math.min(1,pn.dot(pfw))));if(new THREE.Vector3().crossVectors(pn,pfw).dot(m)<0)ang=-ang;
+  const q=new THREE.Quaternion().setFromAxisAngle(m,ang*w);const wq=H.getWorldQuaternion(new THREE.Quaternion());const nw=q.multiply(wq);H.parent.getWorldQuaternion(_p);H.quaternion.copy(_p.invert().multiply(nw));}
 function inWin(t,W){if(!W)return null;for(const w of W)if(t>=w[0]-0.35&&t<=w[1]+0.35)return [w,Math.min(1,(t-w[0]+0.35)/0.35,(w[1]+0.35-t)/0.35)];return null}
 function fx(X,t){X0=X;const F=X.a.fx||{};const ry=X.obj.rotation.y;const loc=(x,y,z)=>new THREE.Vector3(x,y,z).applyAxisAngle(new THREE.Vector3(0,1,0),ry);
   const W=inWin(t,F.wave);if(W){const [w,k]=W;const sides=w[2]==='both'?['Right','Left']:[w[2]||'Right'];const ex=w[2]==='both';
     for(const sd of sides){const sg=sd==='Right'?-1:1;const A=bone(X,sd+'Arm'),FA=bone(X,sd+'ForeArm'),H=bone(X,sd+'Hand');if(!A)continue;
       const ph=Math.sin(t*(ex?7:9)+(sd==='Left'?1.3:0));
-      aim(A,FA,loc(sg*(ex?.55:.62),ex?.85:.62,.12),k);aim(FA,H,loc(sg*(.12+.28*ph),1,.18),k);}}
+      aim(A,FA,loc(sg*(ex?.55:.7),ex?.85:.45,.15),k);aim(FA,H,loc(sg*(.1+.22*ph),1,.12),k);palm(X,sd,H,loc,k);}}
   const H=inWin(t,F.hop);if(H){const [w,k]=H;const ph=Math.abs(Math.sin((t-w[0])*Math.PI*(w[3]||2.4)));X.obj.position.y+=k*(w[2]||.1)*ph;}
   // rosto (morph targets de quem tiver)
   let mo=0;const T=inWin(t,F.talk);if(T){const n=Math.sin(t*23)*.5+Math.sin(t*14.3)*.5;mo=T[1]*Math.max(0,n)*.75;}

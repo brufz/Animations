@@ -33,6 +33,31 @@ SC = {
    act('filha', [[0, 0.15, -1.75, face(-.15, -1), 'idle', 1.1]], wave=[[6.59, 9.64, 'Left']]),
    act('guia', [[0, 1.05, -1.3, face(-.6, -1), 'idle', .4]], smile=.6, wave=[[7.1, 9.64, 'Right']])]),
 }
+
+camWA = dict(camP=[0., 1.75, -8], camT=[0., 1.45, 10], span=1.25)
+camWB = dict(camP=[3.4, 1.7, -7.8], camT=[2.6, 1.45, 10], span=1.25)
+camSL = dict(camP=[-.6, 1.55, -5.2], camT=[-.4, 1.25, 6], span=1.0)
+CAIS = dict(Ldir=[-.45, .75, -.5], light=dict(sunI=2.9))
+SALA = dict(Ldir=[-.7, .62, -.35], light=dict(sunC=0xffe6c8, sunI=1.9, sky=0xfff2e2, gnd=0x8a6a50, hemi=1.7, rimI=.7))
+alt = lambda a, b, d: [[x, min(x + 1.6, d)] for x in [a + 3.2 * i for i in range(5)] if x < d]
+SC.update({
+ 'caA': dict(t0=25.7, t1=30.24, cam=camWA, **CAIS, actors=[
+   act('senhor', [[0, -1.55, 0.6, face(.6, -1), 'idle', .3]], smile=.7),
+   act('filha', [[0, 0.75, -1.9, face(-1, -.45), 'idle', .5]]),
+   act('local', [[0, -0.6, -1.3, face(1.3, -.7), 'idle', .1]], smile=.5, talk=[[1.2, 2.9]], wave=[[.9, 2.6, 'Right']])]),
+ 'caB': dict(t0=55.65, t1=65.96, cam=camWB, **CAIS, actors=[
+   act('menino', [[0, 3.35, -2.3, face(0, -1), 'idle', .2]], wave=[[0, 10.31, 'Right']]),
+   act('moca', [[0, 2.0, -1.2, face(.9, -.45), 'idle', .4]], talk=alt(0, 0, 10.31)),
+   act('rapaz', [[0, 2.75, -1.5, face(-.9, -.25), 'idle', 1.0]], smile=.6, talk=alt(1.6, 0, 10.31)),
+   act('local', [[0, 4.0, -0.7, face(.8, -.45), 'idle', .7]], smile=.3, talk=alt(1.6, 0, 10.31)),
+   act('senhor', [[0, 4.6, -0.95, face(-.8, -.2), 'idle', 1.3]], smile=.7, talk=alt(0, 0, 10.31))]),
+ 'slW': dict(t0=48.5, t1=55.65, cam=camSL, **SALA, actors=[
+   act('canto', [[0, -2.75, 5.45, face(-.25, 1), 'idle', .2]], back=1),
+   act('prof', [[0, -0.8, 4.85, face(.05, -1), 'idle', .5]], talk=[[.2, 3.9]], back=1),
+   act('aluno1', [[0, -1.65, 1.05, face(0, 1), 'idle', .3]]),
+   act('aluno2', [[0, -0.6, 1.05, face(-.2, 1), 'idle', .9]]),
+   act('aluno3', [[0, 0.45, 1.05, face(.1, 1), 'idle', 1.4]])]),
+})
 def depth(cam, P):
     ro = np.array(cam['camP'], float); ww = np.array(cam['camT'], float) - ro; ww /= np.linalg.norm(ww)
     return float((np.array(P, float) - ro) @ ww)
@@ -49,7 +74,7 @@ def run(tags):
                     t = time.time()
                     pg = b.new_page(viewport={"width": PW, "height": H}); pg.on('pageerror', lambda e: print('ERR', e))
                     pg.goto('http://127.0.0.1:8765/stage.html'); pg.wait_for_function("window.ok===1")
-                    fx = {k: v for k, v in a['fx'].items() if k not in ('par', 'blur')}
+                    fx = {k: v for k, v in a['fx'].items() if k not in ('par', 'blur', 'back')}
                     pg.evaluate("o=>setup(o)", dict(S['cam'], w=PW, h=H, Ldir=S['Ldir'], light=S['light'], actors=[dict(spec=CAST[a['who']], keys=a['keys'], fx=fx)]))
                     ims = []
                     for i in range(n):
@@ -62,10 +87,11 @@ def run(tags):
                         if q: bb = q if bb is None else (min(bb[0], q[0]), min(bb[1], q[1]), max(bb[2], q[2]), max(bb[3], q[3]))
                     pad = 24; bb = (max(0, bb[0] - pad), max(0, bb[1] - pad), min(PW, bb[2] + pad), min(H, bb[3] + pad))
                     fr = []
+                    cw, ch = bb[2] - bb[0], bb[3] - bb[1]
                     for i, im in enumerate(ims):
                         fn = f'act/{tag}_{a["who"]}_{i:03d}.webp'; im.crop(bb).save(f'{E}/{fn}', 'WEBP', quality=88, method=4); fr.append(fn)
                     k0 = a['keys'][0]; par = a['fx'].get('par') or round(min(2.2, 7.5 / depth(S['cam'], [k0[1], 0, k0[2]])), 3)
-                    lst.append(dict(who=a['who'], x=bb[0], y=bb[1], par=par, blur=a['fx'].get('blur', 0), frames=fr, z=depth(S['cam'], [k0[1], 0, k0[2]])))
+                    lst.append(dict(who=a['who'], x=bb[0], y=bb[1], w=cw, h=ch, par=par, blur=a['fx'].get('blur', 0), back=a['fx'].get('back', 0), frames=fr, z=depth(S['cam'], [k0[1], 0, k0[2]])))
                     print(tag, a['who'], n, 'quadros', round(time.time() - t), 's', flush=True)
                 lst.sort(key=lambda d: -d['z']); man[tag] = dict(t0=S['t0'], actors=lst)
                 json.dump(man, open(f'{OUT}/act.json', 'w'))

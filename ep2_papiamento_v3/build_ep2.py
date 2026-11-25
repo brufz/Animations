@@ -49,12 +49,12 @@ function sprite(S,sp,extra={}){const keys=Object.keys(sp.frames);const g=frames(
 function div(S,cls,html,x,y,par=1){const e=document.createElement('div');e.className=cls;e.innerHTML=html;e.style.left=x+'px';e.style.top=y+'px';S.el.appendChild(e);const it={e,x,y,par,isDiv:1};S.items.push(it);return it}
 function placeAll(S,camX){S.items.forEach(it=>{it.e.style.transform=(it.isDiv?'translate(-50%,-100%) ':'')+(it.extra||'');it.e.style.left=(it.x+(it.dx||0)+camX*it.par)+'px';if(it.dy!==undefined)it.e.style.top=(it.y+it.dy)+'px'})}
 function shift(g,dx,dy){g.its.forEach(it=>{it.dx=dx;it.dy=dy})}
-function walkIn(g,t,t0,t1,dist,seed){const k=prog(t,t0,t1);shift(g,-dist*(1-eout(k)),k<1?-Math.abs(Math.sin(t*9))*8:0);if(k<1)g.pick('k'+(Math.floor(t*10+seed)%8));else happy(g,t,seed)}
+function walkIn(g,t,t0,t1,dist,seed){if(!g)return;const k=prog(t,t0,t1);shift(g,-dist*(1-eout(k)),k<1?-Math.abs(Math.sin(t*9))*8:0);if(k<1)g.pick('k'+(Math.floor(t*10+seed)%8));else happy(g,t,seed)}
 // ---- comportamentos dos bonecos
 function blinkK(t,seed){const p=3.1+seed*.7;return ((t+seed*1.3)%p)<.13}
-function happy(g,t,seed){g.pick(blinkK(t,seed)?'blink':'base')}
-function talk(g,t,on,seed){if(on){const k=Math.floor(t*7.5+seed*3);g.pick((k*7919%5)<3?'open':'base')}else g.pick(blinkK(t,seed)&&g.keys.includes('blink')?'blink':'base')}
-function wave(g,t,talking){const i=Math.floor(t*9)%6;let k='w'+i;if(talking&&(Math.floor(t*7.5)*7919%5)<3&&g.keys.includes(k+'o'))k+='o';g.pick(k)}
+function happy(g,t,seed){if(!g)return;g.pick(blinkK(t,seed)?'blink':'base')}
+function talk(g,t,on,seed){if(!g)return;if(on){const k=Math.floor(t*7.5+seed*3);g.pick((k*7919%5)<3?'open':'base')}else g.pick(blinkK(t,seed)&&g.keys.includes('blink')?'blink':'base')}
+function wave(g,t,talking){if(!g)return;const i=Math.floor(t*9)%6;let k='w'+i;if(talking&&(Math.floor(t*7.5)*7919%5)<3&&g.keys.includes(k+'o'))k+='o';g.pick(k)}
 function pop(it,T,a,b){const p=b===undefined?prog(T,a,a+.3):Math.min(prog(T,a,a+.3),1-prog(T,b-.25,b));it.e.style.opacity=p;it.extra=` scale(${p>0?eback(Math.min(1,p)):0.01})`;}
 // ---- homografia (CSS matrix3d) de um retângulo w×h para 4 pontos
 function homog(w,h,q){const [x0,y0]=q[0],[x1,y1]=q[1],[x2,y2]=q[2],[x3,y3]=q[3];
@@ -89,9 +89,9 @@ scene(PB[2][0],PB[2][1],S=>{S.map=img(S,CB.src.replace('.png','.jpg'),0,0,0);S.b
   pop(S.la,T,16.6);pop(S.lc,T,22.2);pop(S.lb,T,23.3);
   [S.la,S.lc,S.lb].forEach(it=>it.e.style.transform='translate(-50%,-100%)'+it.extra);S.lv.e.style.opacity=prog(T,17,17.6)});
 // 3 CAIS DE WILLEMSTAD — "bon dia, kon ta bai?"
-scene(PB[3][0],PB[3][1],S=>{const L=C.layers.A,Sp=C.sprites.A;layer(S,L.far);layer(S,L.near);S.g={};['senhor','local','filha'].forEach(k=>S.g[k]=sprite(S,Sp[k]));layer(S,L.fg);
+scene(PB[3][0],PB[3][1],S=>{const L=C.layers.A,Sp=C.sprites.A;layer(S,L.far);layer(S,L.near);S.g={};if(ACT.caA)actors(S,ACT.caA);else ['senhor','local','filha'].forEach(k=>S.g[k]=sprite(S,Sp[k]));layer(S,L.fg);
   const l=Sp.local;S.b=div(S,'bub','Bon dia, kon ta bai?',l.x-M+l.w*.62,l.y+l.h*.08,.8);S.b.e.style.setProperty('--tx','22%');
-},(S,t,T)=>{placeAll(S,kf(t,[[0,45],[4.6,-45]]));talk(S.g.local,t,T>26.9&&T<28.6,0);happy(S.g.filha,t,2);pop(S.b,T,26.95);S.b.e.style.transform='translate(-50%,-100%)'+S.b.extra});
+},(S,t,T)=>{if(ACT.caA)actorsAt(S,ACT.caA,T);placeAll(S,kf(t,[[0,45],[4.6,-45]]));talk(S.g.local,t,T>26.9&&T<28.6,0);happy(S.g.filha,t,2);pop(S.b,T,26.95);S.b.e.style.transform='translate(-50%,-100%)'+S.b.extra});
 // 4/5 ATLÂNTICO
 function atlScene(t0,t1,route,camK,labels,shipK){return scene(t0,t1,S=>{S.map=img(S,'mapa_atlantico.jpg',0,0,0);S.bl=img(S,'mapa_atlantico_blur.jpg',0,0,0,{webkitMaskImage:'linear-gradient(to bottom,#000 0%,rgba(0,0,0,0) 28%,rgba(0,0,0,0) 66%,#000 94%)'});
   const pts=AT[route];const d='M'+pts.map(p=>p[0].toFixed(1)+','+p[1].toFixed(1)).join(' L');
@@ -120,14 +120,14 @@ scene(PB[6][0],PB[6][1],S=>{const L=SL.layers.K;layer(S,L.room);layer(S,L.desk);
 scene(PB[7][0],PB[7][1],S=>{const L=SL.layers.W,Sp=SL.sprites;layer(S,L.room);
   const w=900,h=300;S.tx=div(S,'abs',`<div style="width:${w}px;height:${h}px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:CHALK;font-size:84px;line-height:1.1;color:rgba(245,245,235,.9);text-shadow:0 0 3px rgba(255,255,255,.5)">ALLEEN<br>NEDERLANDS</div>`,-M,0,.45);
   S.tx.e.style.transformOrigin='0 0';S.tx.m=homog(w,h,SL.board);S.tx.isDiv=0;
-  S.g={};S.g.canto=sprite(S,Sp.canto);S.g.prof=sprite(S,Sp.prof);layer(S,L.desk);['a1','a2','a3'].forEach(k=>S.g[k]=sprite(S,Sp[k]));layer(S,L.fg);
-  const a=Sp.a2;S.b=div(S,'bub','Bon dia!',a.x-M+a.w*.5,a.y+a.h*.12,a.par);
+  S.g={};const D=ACT.slW;if(D){actors(S,{actors:D.actors.filter(a=>a.back)});const b=S.act;layer(S,L.desk);actors(S,{actors:D.actors.filter(a=>!a.back)});S.act=b.concat(S.act);}else{S.g.canto=sprite(S,Sp.canto);S.g.prof=sprite(S,Sp.prof);layer(S,L.desk);['a1','a2','a3'].forEach(k=>S.g[k]=sprite(S,Sp[k]));}layer(S,L.fg);
+  const a=ACT.slW?Object.assign({},ACT.slW.actors.find(q=>q.who==='aluno2')):Sp.a2;if(ACT.slW)a.y-=10;S.b=div(S,'bub','Bon dia!',a.x-M+a.w*.5,a.y+a.h*.12,a.par);
   const c=Sp.canto;S.x=div(S,'abs','<div style="font-family:RB;font-weight:900;font-size:120px;color:#e8483a;-webkit-text-stroke:8px #fff;paint-order:stroke fill">✕</div>',c.x-M+c.w*.55,c.y+c.h*.2,c.par);
-},(S,t,T)=>{const cx=kf(t,[[0,40],[7.1,-40]]);S.items.forEach(it=>{it.e.style.left=(it.x+cx*it.par)+'px'});S.tx.e.style.transform=S.tx.m;
+},(S,t,T)=>{if(ACT.slW)actorsAt(S,ACT.slW,T);const cx=kf(t,[[0,40],[7.1,-40]]);S.items.forEach(it=>{it.e.style.left=(it.x+cx*it.par)+'px'});S.tx.e.style.transform=S.tx.m;
   talk(S.g.prof,t,T>48.7&&T<52.4,0);pop(S.b,T,52.75,54.4);S.b.e.style.transform='translate(-50%,-100%)'+S.b.extra;pop(S.x,T,54.9);S.x.e.style.transform='translate(-50%,-100%)'+S.x.extra});
 // 8 HOJE — Curaçao fala papiamento
-scene(PB[8][0],PB[8][1],S=>{const L=C.layers.B,Sp=C.sprites.B;layer(S,L.far);layer(S,L.near);S.g={};['local','senhor','moca','rapaz','menino'].forEach(k=>S.g[k]=sprite(S,Sp[k]));layer(S,L.fg);
-},(S,t,T)=>{placeAll(S,kf(t,[[0,-50],[10.3,50]]));talk(S.g.moca,t,(t%3.2)<1.6,0);happy(S.g.rapaz,t,1);talk(S.g.local,t,((t+1.6)%3.2)<1.6,2);happy(S.g.senhor,t,3);wave(S.g.menino,t,false)});
+scene(PB[8][0],PB[8][1],S=>{const L=C.layers.B,Sp=C.sprites.B;layer(S,L.far);layer(S,L.near);S.g={};if(ACT.caB)actors(S,ACT.caB);else ['local','senhor','moca','rapaz','menino'].forEach(k=>S.g[k]=sprite(S,Sp[k]));layer(S,L.fg);
+},(S,t,T)=>{if(ACT.caB)actorsAt(S,ACT.caB,T);placeAll(S,kf(t,[[0,-50],[10.3,50]]));talk(S.g.moca,t,(t%3.2)<1.6,0);happy(S.g.rapaz,t,1);talk(S.g.local,t,((t+1.6)%3.2)<1.6,2);happy(S.g.senhor,t,3);wave(S.g.menino,t,false)});
 // 9 FINAL — pôr do sol no parque, todos dando tchau
 parkScene(PB[9][0],PB[9][1],'S',[['mae',{filter:'sepia(.18) saturate(1.1) brightness(.97)'}],['filha',{filter:'sepia(.18) saturate(1.1) brightness(.97)'}],['guia',{filter:'sepia(.18) saturate(1.1) brightness(.97)'}]],[[0,50],[9.6,-50]],(S,t,T)=>{const w=T>72.55;if(w){wave(S.g.mae,T+.3);wave(S.g.filha,T);wave(S.g.guia,T+.6)}else{happy(S.g.mae,t,0);happy(S.g.filha,t,1);happy(S.g.guia,t,2)}},true);
 """
