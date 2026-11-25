@@ -1,0 +1,118 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:transparent}canvas{display:block}</style></head><body><canvas id="c" width="300" height="500"></canvas>
+<script src="lib3d.js"></script><script>
+const SCENE_GLSL=`vec2 kiosk(vec3 p,vec3 c,float ry,float m){
+  vec2 r=vec2(1e3,0.);vec3 q=p-c;q.xz*=rot(ry);
+  {float bd=length(q-vec3(0,1.3,0))-2.;if(bd>.4)return vec2(bd,0.);}
+  r=U(r,vec2(sdRBox(q,vec3(0,.55,0),vec3(.75,.55,.7),.06),3.));
+  r=U(r,vec2(sdRBox(q,vec3(0,1.02,-.78),vec3(.78,.05,.12),.03),13.)); // balcão
+  // toldo inclinado
+  vec3 a=q-vec3(0,1.55,-.85);a.yz*=rot(-.45);
+  r=U(r,vec2(sdRBox(a,vec3(0),vec3(.92,.03,.42),.03),m));
+  // babado do toldo
+  float sc=1e3;for(int i=0;i<9;i++){sc=min(sc,sdSph(q,vec3(-.84+float(i)*.21,1.36,-1.22),.105));}
+  sc=max(max(sc,q.y-1.37),abs(q.z+1.22)-.03);r=U(r,vec2(sc,m));
+  r=U(r,vec2(sdRBox(q,vec3(0,1.75,-.72),vec3(.6,.2,.03),.03),3.5));r=U(r,vec2(sdRBox(q,vec3(0,1.45,0),vec3(.74,.3,.68),.04),3.));r=U(r,vec2(sdRBox(q,vec3(0,2.02,0),vec3(.84,.05,.78),.03),15.));
+  // telhado
+  r=U(r,vec2(sdCCone(q,vec3(0,2.4,0),.35,1.05,.06)-.02,15.));
+  r=U(r,vec2(sdCap(q,vec3(0,2.7,0),vec3(0,3.15,0),.025),6.));
+  vec3 f=q-vec3(.18,3.05,0);r=U(r,vec2(sdRBox(f,vec3(0),vec3(.17,.09,.01),.01),16.));
+  return r;
+}
+vec2 lamp(vec3 p,vec3 c){vec3 q=p-c;float bd=sdCap(q,vec3(0,0,0),vec3(0,3.,0),.3);if(bd>.4)return vec2(bd,0.);
+  vec2 r=vec2(sdCyl(q,vec3(0,1.3,0),1.3,.05),6.);r=U(r,vec2(sdCyl(q,vec3(0,.08,0),.08,.13)-.02,6.));
+  r=U(r,vec2(sdSph(q,vec3(0,2.72,0),.2),7.));r=U(r,vec2(sdCyl(q,vec3(0,2.52,0),.04,.12),6.));return r;}
+vec2 tree(vec3 p,vec3 c,float s){vec3 q=(p-c)/s;{float bd=length(q-vec3(0,2.,0))-1.75;if(bd*s>.4)return vec2(bd*s,0.);}
+  vec2 r=vec2(sdCap(q,vec3(0,0,0),vec3(0,1.6,0),.13),8.);
+  float cp=sdSph(q,vec3(0,2.2,0),.9);cp=smin(cp,sdSph(q,vec3(.55,1.9,-.1),.6),.3);cp=smin(cp,sdSph(q,vec3(-.5,1.95,.1),.62),.3);cp=smin(cp,sdSph(q,vec3(.1,2.75,.1),.6),.3);
+  r=U(r,vec2(cp,9.));r.x*=s;return r;}
+vec2 wheel(vec3 p){
+  vec3 c=vec3(-4.5,9.5,44.);vec3 q=p-c;
+  {float bd=length(q)-11.5;if(bd>.4)return vec2(bd,0.);}
+  vec2 r=vec2(1e3,0.);
+  r=U(r,vec2(min(sdTorZ(q,vec3(0),vec2(8.,.16)),sdTorZ(q,vec3(0,0,.0),vec2(6.6,.08))),10.));
+  vec3 s=q;s.xy*=rot(wheelA);float a=atan(s.y,s.x);float sec=6.2831/16.;a=mod(a+sec*.5,sec)-sec*.5;vec2 pp=length(s.xy)*vec2(cos(a),sin(a));
+  r=U(r,vec2(sdCap(vec3(pp,s.z),vec3(0),vec3(8.,0,0),.06),13.));
+  r=U(r,vec2(sdCyl(q.xzy,vec3(0),.6,.45),10.));
+  // cabines
+  for(int i=0;i<12;i++){float an=float(i)/12.*6.2831+wheelA;vec3 cc=vec3(cos(an)*8.,sin(an)*8.-.75,0.);
+    r=U(r,vec2(sdRBox(q,cc,vec3(.5,.42,.5),.22),11.+float(i)*.01));}
+  // suportes
+  r=U(r,vec2(min(sdCap(q,vec3(0),vec3(-5.,-9.5,-1.2),.22),sdCap(q,vec3(0),vec3(5.,-9.5,-1.2),.22)),13.));
+  r=U(r,vec2(min(sdCap(q,vec3(0),vec3(-5.,-9.5,1.2),.22),sdCap(q,vec3(0),vec3(5.,-9.5,1.2),.22)),13.));
+  return r;
+}
+vec3 trk(float t){return vec3(-2.+t*26.,4.+2.6*sin(t*9.)+1.2*sin(t*17.+1.),31.+3.*cos(t*5.));}
+vec2 coaster(vec3 p){
+  {float bd=sdRBox(p,vec3(11.,6.,31.),vec3(15.,7.,9.),0.);if(bd>.4)return vec2(bd,0.);}
+  vec2 r=vec2(1e3,0.);vec3 a=trk(0.);
+  for(int i=1;i<=46;i++){vec3 b=trk(float(i)/46.);r=U(r,vec2(sdCap(p,a,b,.2),12.));
+    if(i%3==0)r=U(r,vec2(sdCap(p,vec3(b.x,0.,b.z),b-vec3(0,.2,0),.09),13.));a=b;}
+  r=U(r,vec2(sdTorZ(p,vec3(9.,5.5,34.),vec2(4.2,.22)),12.));r=U(r,vec2(min(sdCap(p,vec3(6.,0,34.),vec3(8.,1.4,34.),.12),sdCap(p,vec3(12.,0,34.),vec3(10.,1.4,34.),.12)),13.));
+  // carrinho
+  vec3 cc=trk(.62);r=U(r,vec2(sdRBox(p,cc+vec3(0,.55,0),vec3(.7,.3,.4),.18),17.));
+  return r;
+}
+
+vec2 scene(vec3 p){
+  vec2 r=vec2(1e3,0.);
+  if(layer>1.5&&layer<2.5){
+    float fb=1e3;for(int i=0;i<7;i++){float a=float(i)*.9;fb=smin(fb,sdSph(p,vec3(-.95+.4*cos(a),.05+.3*sin(a*1.7),-4.8+.3*sin(a)),.36),.15);}
+    r=U(r,vec2(fb,9.6));
+    for(int i=0;i<5;i++){float a=float(i)*1.3;vec3 bc=vec3(1.2+.22*cos(a),2.45+.25*sin(a*1.3)+.08*float(i),-4.7+.15*sin(a));r=U(r,vec2(sdEll(p,bc,vec3(.17,.2,.17)),20.+float(i)*.01));r=U(r,vec2(sdCap(p,bc-vec3(0,.2,0),vec3(1.1,1.1,-4.75),.006),13.));}
+    return r;}
+  if(GR){bool ok=layer<.5?p.z<zSplit:(layer>.5&&layer<1.5?p.z>=zSplit-2.:false);if(ok)r=U(r,vec2(p.y,p.z<14.?1.:2.));}
+  if(layer<.5){
+    r=U(r,kiosk(p,vec3(-2.3,0,7.5),.6,4.));
+    r=U(r,kiosk(p,vec3(2.6,0,9.5),-.6,5.));
+    r=U(r,lamp(p,vec3(-1.6,0,4.)));
+    r=U(r,lamp(p,vec3(1.9,0,5.2)));
+    r=U(r,tree(p,vec3(-6.2,0,11.),1.25));
+    r=U(r,tree(p,vec3(6.8,0,14.),1.4));
+    r=U(r,tree(p,vec3(-4.6,0,15.5),1.1));
+    float hd=1e3;for(int i=0;i<9;i++){float x=-9.+float(i)*2.3;hd=smin(hd,sdSph(p,vec3(x,.1,17.2+.6*sin(float(i)*2.)),.95),.5);}
+    r=U(r,vec2(hd,9.5));
+    r=U(r,vec2(sdCyl(p,vec3(-.6,.22,8.5),.22,.9)-.05,3.5));r=U(r,vec2(sdCyl(p,vec3(-.6,.42,8.5),.12,.78)-.12,9.6));
+  }else if(layer<1.5){
+    float hl=1e3;for(int i=0;i<6;i++){hl=min(hl,sdEll(p,vec3(-60.+float(i)*26.,0.,75.),vec3(22.,9.+4.*hash(vec2(float(i),1.)),10.)));}
+    r=U(r,vec2(hl,14.));
+  }else if(layer<3.5){ r=U(r,wheel(p));
+  }else{
+    r=U(r,coaster(p));
+    for(int i=0;i<7;i++){float x=-40.+float(i)*13.;r=U(r,tree(p,vec3(x,0,24.+8.*hash(vec2(float(i),3.))),1.7+.6*hash(vec2(float(i),7.))));}
+  }
+  return r;
+}
+bool groundOK(vec3 p){return layer<.5?p.z<zSplit:(layer>.5&&layer<1.5?p.z>=zSplit-2.:false);}
+float groundMat(vec3 p){return p.z<14.?1.:2.;}
+vec3 SKY(vec3 rd){
+  vec3 top=mix(vec3(.36,.58,.86),vec3(.32,.36,.62),sunset),hor=mix(vec3(.98,.84,.66),vec3(1.,.62,.38),sunset);
+  float y=clamp(rd.y*2.2,0.,1.);vec3 c=mix(hor,top,pow(y,.7));
+  vec3 L=normalize(mix(vec3(-.55,.42,.75),vec3(-.7,.12,.7),sunset));float s=max(dot(rd,L),0.);
+  c+=mix(vec3(1.,.8,.5),vec3(1.,.55,.3),sunset)*pow(s,8.)*(.5+.4*sunset)+vec3(1.,.9,.7)*pow(s,200.)*2.;
+  // nuvens suaves
+  if(rd.y>0.){vec2 q=rd.xz/(rd.y+.15)*1.2;float cl=smoothstep(.55,.85,vn(q*1.3)*.6+vn(q*3.1)*.4);c=mix(c,mix(vec3(1.,.98,.95),vec3(1.,.75,.6),sunset),cl*.55*smoothstep(0.,.25,rd.y));}
+  return c;}
+
+vec3 mcol0(float m,vec3 p){
+  if(m<1.5){vec2 g=p.xz*vec2(1.6,1.6);vec2 id=floor(g);float h=hash(id);vec2 f=fract(g);float e=smoothstep(.0,.06,min(min(f.x,1.-f.x),min(f.y,1.-f.y)));
+    vec3 c=mix(vec3(.86,.72,.56),vec3(.92,.8,.64),h);c=mix(vec3(.66,.52,.4),c,.35+.65*e);
+    float pth=smoothstep(1.8,1.6,abs(p.x-.3+.15*p.z));c=mix(c,mix(vec3(.82,.45,.33),vec3(.88,.52,.38),h),pth*e);return c;}
+  if(m<2.5){float h=hash(floor(p.xz*3.));return mix(vec3(.42,.62,.3),vec3(.5,.7,.34),h);}
+  if(m<3.25)return vec3(.95,.86,.7);if(m<3.75)return vec3(.98,.96,.9);
+  if(m<4.5)return mod(floor((p.x+20.)*4.4),2.)<1.?vec3(.86,.22,.2):vec3(.98,.95,.9);
+  if(m<5.5)return mod(floor((p.x+20.)*4.4),2.)<1.?vec3(.98,.76,.2):vec3(.2,.55,.85);
+  if(m<6.5)return vec3(.16,.32,.28);if(m<7.5)return vec3(4.,3.4,2.4);if(m<8.5)return vec3(.45,.3,.2);
+  if(m<9.25)return vec3(.32,.58,.28);if(m<9.55)return vec3(.28,.52,.25);if(m<9.75){float h=hash(floor(p.xz*9.));return h>.75?vec3(.95,.35,.45):(h>.5?vec3(.98,.85,.3):vec3(.3,.56,.26));}
+  if(m<10.5)return vec3(.96,.95,.93);
+  if(m<11.5){float i=floor((m-11.)*100.+.5);vec3 cs[6]=vec3[](vec3(.95,.75,.2),vec3(.25,.62,.85),vec3(.88,.3,.25),vec3(.45,.8,.72),vec3(.95,.55,.25),vec3(.6,.42,.82));return cs[int(mod(i,6.))];}
+  if(m>19.5){float i=floor((m-20.)*100.+.5);vec3 cs[5]=vec3[](vec3(.95,.3,.35),vec3(.98,.8,.25),vec3(.3,.65,.95),vec3(.5,.85,.5),vec3(.95,.55,.85));return cs[int(mod(i,5.))];}
+  if(m<12.5)return vec3(.85,.2,.18);if(m<13.5)return vec3(.92,.9,.86);if(m<14.5)return vec3(.42,.6,.42);if(m<15.5)return vec3(.92,.45,.3);if(m<16.5)return vec3(.2,.6,.45);return vec3(.2,.45,.85);
+}
+
+vec3 mcol(float m,vec3 p,vec3 n,inout float ks,inout float em){
+  if(m>6.5&&m<7.5){em=1.;return vec3(1.,.95,.8);}
+  if(m>19.5)ks=.8;
+  return mcol0(m,p);}
+`;
+make3d(SCENE_GLSL);
+</script></body></html>

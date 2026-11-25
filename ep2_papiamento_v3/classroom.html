@@ -1,0 +1,86 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:transparent}canvas{display:block}</style></head><body><canvas id="c" width="300" height="500"></canvas>
+<script src="lib3d.js"></script><script>
+// Sala de aula antiga (Curaçao, fim do séc. XIX): lousa, carteiras de madeira, luz pela janela
+const SCENE_GLSL=`
+vec2 desk(vec3 p,vec3 c){vec3 q=p-c;{float bd=length(q-vec3(0,.45,0))-.9;if(bd>.3)return vec2(bd,0.);}
+  vec2 r=vec2(sdRBox(q,vec3(0,.62,0),vec3(.42,.03,.26),.01),3.);
+  r=U(r,vec2(sdRBox(q,vec3(0,.42,.24),vec3(.42,.2,.02),.01),3.));
+  for(int i=0;i<4;i++){float sx=i<2?-.38:.38;float sz=(i%2==0)?-.22:.22;r=U(r,vec2(sdRBox(q,vec3(sx,.3,sz),vec3(.025,.3,.025),.005),4.));}
+  r=U(r,vec2(sdRBox(q,vec3(0,.35,-.42),vec3(.38,.025,.15),.01),3.)); // banco
+  for(int i=0;i<2;i++){float sx=i<1?-.33:.33;r=U(r,vec2(sdRBox(q,vec3(sx,.17,-.42),vec3(.025,.17,.12),.005),4.));}
+  r=U(r,vec2(sdRBox(q,vec3(-.15,.665,-.02),vec3(.12,.012,.09),.004),12.)); // lousinha/caderno
+  return r;}
+vec2 scene(vec3 p){
+  vec2 r=vec2(1e3,0.);
+  if(layer>1.5){ // primeiro plano: globo terrestre desfocado na estante
+    r=U(r,vec2(sdSph(p,vec3(1.05,.75,-4.1),.32),20.));r=U(r,vec2(sdTorZ(p.zyx,vec3(-4.1,.75,1.05),vec2(.37,.018)),21.));
+    r=U(r,vec2(sdCyl(p,vec3(1.05,.3,-4.1),.12,.05),21.));
+    return r;}
+  if(layer<.5){ // mesa da professora
+    vec3 c=vec3(1.5,0.,4.25);r=U(r,vec2(sdRBox(p,c+vec3(0,.72,0),vec3(.85,.04,.4),.01),4.));
+    r=U(r,vec2(sdRBox(p,c+vec3(0,.38,-.36),vec3(.8,.32,.03),.01),4.));
+    r=U(r,vec2(sdRBox(p,c+vec3(-.6,.79,.1),vec3(.17,.03,.13),.01),13.)); // livros
+    r=U(r,vec2(sdRBox(p,c+vec3(-.58,.84,.12),vec3(.15,.025,.11),.01),14.));
+    r=U(r,vec2(sdCyl(p,c+vec3(.45,.82,0),.06,.05),15.)); // tinteiro
+    r=U(r,vec2(sdSph(p,c+vec3(.62,.83,.18),.07),16.)); // maçã
+    vec3 bq=p-(c+vec3(.12,.81,-.05));bq.xz*=rot(.12);
+    r=U(r,vec2(sdRBox(bq,vec3(0),vec3(.34,.045,.24),.012),17.)); // livro grande
+    r=U(r,vec2(sdRBox(bq,vec3(.012,0,0),vec3(.33,.036,.235),.004),18.)); // páginas
+    r=U(r,vec2(sdRBox(bq,vec3(0,0,0),vec3(.03,.052,.25),.004),19.)); // correia
+    r=U(r,vec2(sdRBox(bq,vec3(0,.02,-.25),vec3(.045,.05,.022),.012),22.)); // cadeado
+    r=U(r,vec2(sdTorZ(bq,vec3(0,.075,-.25),vec2(.03,.008)),23.));
+    return r;}
+  // sala
+  if(!INSH){
+    r=U(r,vec2(p.y,1.)); // chão
+    r=U(r,vec2(6.-p.z,2.)); // parede do fundo
+    r=U(r,vec2(4.6+p.x,2.5)); // parede esquerda
+    r=U(r,vec2(4.6-p.x,2.6)); // parede direita
+    r=U(r,vec2(3.5-p.y,2.7)); // teto
+  }
+  // janelas (vãos claros) na parede esquerda
+  for(int i=0;i<2;i++){float z=.2+float(i)*3.2;r=U(r,vec2(sdRBox(p,vec3(-4.6,1.85,z),vec3(.06,.85,.62),.0),5.));
+    r=U(r,vec2(sdRBox(p,vec3(-4.52,1.85,z),vec3(.04,.9,.03),.0),4.));r=U(r,vec2(sdRBox(p,vec3(-4.52,1.85,z),vec3(.04,.03,.66),.0),4.));
+    r=U(r,vec2(sdRBox(p,vec3(-4.5,.98,z),vec3(.1,.04,.7),.01),4.));}
+  // janela no fundo à esquerda
+  r=U(r,vec2(sdRBox(p,vec3(-3.35,1.9,6.),vec3(.6,.85,.06),.0),5.));r=U(r,vec2(sdRBox(p,vec3(-3.35,1.9,5.94),vec3(.03,.88,.03),.0),4.));r=U(r,vec2(sdRBox(p,vec3(-3.35,1.9,5.94),vec3(.64,.03,.03),.0),4.));r=U(r,vec2(sdRBox(p,vec3(-3.35,1.02,5.9),vec3(.7,.04,.1),.01),4.));
+  // lousa com moldura
+  r=U(r,vec2(sdRBox(p,vec3(-.3,1.8,5.97),vec3(1.9,.72,.03),.0),6.));
+  r=U(r,vec2(sdRBox(p,vec3(-.3,1.8,5.99),vec3(1.98,.8,.02),.01),4.));
+  r=U(r,vec2(sdRBox(p,vec3(-.3,1.03,5.9),vec3(1.9,.03,.08),.01),4.));
+  // relógio
+  r=U(r,vec2(sdCyl(p.xzy,vec3(2.6,5.95,2.85),.04,.25),7.));
+  for(int i=0;i<5;i++){r=U(r,vec2(sdRBox(p,vec3(0,3.42,-2.+float(i)*2.),vec3(4.6,.08,.1),.0),4.));}
+  r=U(r,vec2(sdCap(p,vec3(-.3,3.4,2.5),vec3(-.3,2.85,2.5),.01),4.));r=U(r,vec2(sdCCone(p,vec3(-.3,2.75,2.5),.1,.25,.06),24.));
+  // rodapé e lambri
+  r=U(r,vec2(sdRBox(p,vec3(0,.5,5.95),vec3(4.6,.5,.04),.0),8.));
+  r=U(r,vec2(sdRBox(p,vec3(-4.55,.5,0),vec3(.04,.5,6.),.0),8.));r=U(r,vec2(sdRBox(p,vec3(4.55,.5,0),vec3(.04,.5,6.),.0),8.));
+  // estante à direita
+  vec3 e=vec3(4.25,0.,3.);r=U(r,vec2(sdRBox(p,e+vec3(0,1.,0),vec3(.3,1.,.8),.01)+0.,4.));
+  float bk=1e3;for(int i=0;i<3;i++){for(int j=0;j<7;j++){bk=min(bk,sdRBox(p,e+vec3(-.32,.45+float(i)*.6,-.6+float(j)*.2),vec3(.06,.2+.04*hash(vec2(float(i),float(j))),.07),.005));}}
+  r=U(r,vec2(bk,9.));
+  // carteiras
+  r=U(r,desk(p,vec3(-1.5,0.,1.6)));r=U(r,desk(p,vec3(0.,0.,1.6)));r=U(r,desk(p,vec3(1.5,0.,1.6)));
+  r=U(r,desk(p,vec3(-1.5,0.,3.)));r=U(r,desk(p,vec3(0.,0.,3.)));
+  return r;}
+bool groundOK(vec3 p){return false;}
+float groundMat(vec3 p){return 1.;}
+vec3 SKY(vec3 rd){return vec3(.95,.9,.8);}
+vec3 mcol(float m,vec3 p,vec3 n,inout float ks,inout float em){
+  if(m<1.5){float pl=floor(p.x*4.);float h=hash(vec2(pl,floor(p.z*.7+pl*.37)));float g=vn(vec2(p.x*30.,p.z*3.));return mix(vec3(.5,.33,.2),vec3(.62,.42,.26),h*.6+g*.4)*(.9+.1*smoothstep(0.,.03,abs(fract(p.x*4.)-.5)-.47+.03));}
+  if(m<2.55)return vec3(.93,.88,.76);if(m<2.65)return vec3(.9,.85,.72);if(m<2.75){em=1.;return vec3(.55,.5,.44);}
+  if(m<3.5){ks=.3;return vec3(.62,.42,.25)*(.9+.1*vn(p.xz*vec2(4.,30.)));}
+  if(m<4.5){ks=.25;return vec3(.42,.27,.16)*(.9+.1*vn(p.xy*vec2(4.,30.)+p.z));}
+  if(m<5.5){em=1.;return vec3(1.,.97,.88)*1.05;}
+  if(m<6.5)return vec3(.16,.26,.21)*(.9+.15*vn(p.xy*4.));
+  if(m<7.5){float d=length(p.xy-vec2(2.6,2.85));return d<.21?vec3(.97,.95,.9):vec3(.3,.2,.12);}
+  if(m<8.5)return vec3(.45,.5,.44);
+  if(m<9.5){float h=hash(floor(vec2(p.z*5.,p.y*1.7)));return h<.25?vec3(.6,.15,.12):(h<.5?vec3(.15,.3,.5):(h<.75?vec3(.2,.42,.25):vec3(.75,.6,.3)));}
+  if(m<12.5)return vec3(.2,.2,.22);if(m<13.5)return vec3(.55,.15,.12);if(m<14.5)return vec3(.15,.25,.45);if(m<15.5){ks=.8;return vec3(.05);}if(m<16.5){ks=.6;return vec3(.8,.15,.1);}
+  if(m<17.5){ks=.35;return vec3(.32,.1,.07)*(.85+.15*vn(p.xz*40.));}if(m<18.5)return vec3(.93,.89,.78);if(m<19.5)return vec3(.25,.16,.1);
+  if(m<20.5){vec3 q=normalize(p-vec3(1.05,.75,-4.1));float land=step(.55,vn(q.xy*3.+q.z*2.));ks=.5;return land>.5?vec3(.75,.65,.4):vec3(.25,.45,.7);}
+  if(m<21.5){ks=.6;return vec3(.7,.55,.3);}if(m<22.5){ks=1.;return vec3(.85,.65,.25);}if(m<23.5){ks=1.;return vec3(.7,.7,.72);}if(m<24.5){ks=.5;return vec3(.15,.3,.25);}
+  return vec3(1,0,1);}
+`;
+make3d(SCENE_GLSL);
+</script></body></html>
