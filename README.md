@@ -11,6 +11,7 @@ Motor usado nos vídeos do canal **"E se...?"** (história alternativa com fatos
 
 | Arquivo | O que é |
 |---|---|
+| `papiamento.html` | Episódio 2 — Hopi Hari e o papiamento (parque, mapa do Caribe, Atlântico, sala de aula) |
 | `holanda.html` | Episódio 1 — "E se os holandeses nunca tivessem saído do Nordeste?" (cenas, legendas, HUD) |
 | `render.py` | Renderiza quadros-chave e cenas em MP4 |
 | `align.py` | Alinha as frases do roteiro às pausas da narração (sincronia de cenas e legendas) |
