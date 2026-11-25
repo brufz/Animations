@@ -52,6 +52,8 @@ export function retarget(src,root,fps=30){
   return new THREE.AnimationClip(clip.name,clip.duration,tracks);}
 export async function load(spec){
   const g=await gl.loadAsync(M+spec.model);const obj=g.scene;
+  // proporções (ex.: criança): escala por osso, aplicada antes de medir altura e do retarget
+  if(spec.prop){obj.traverse(o=>{if(!o.isBone)return;const k=key(o.name).replace(/^(Left|Right)/,'');const f=spec.prop[k];if(f)o.scale.multiplyScalar(f);});}
   if(spec.only)obj.traverse(o=>{if(o.isMesh&&!o.name.startsWith(spec.only))o.visible=false});
   obj.traverse(o=>{if((o.isMesh||o.isSkinnedMesh)&&o.visible){o.castShadow=true;o.frustumCulled=false;
     if(o.material){o.material=o.material.clone();const c=spec.colors&&spec.colors[o.name];if(c!==undefined){if(c===null)o.visible=false;else{o.material.color=new THREE.Color(c);}}

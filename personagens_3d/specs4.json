@@ -1,0 +1,5 @@
+[{"spec":{"model":"Michelle.glb","height":1.64,"anims":{"idle":"xbot:idle"}},"k":"idle","t":0.6},
+ {"spec":{"model":"Michelle.glb","height":1.12,"prop":{"UpLeg":0.82,"Arm":0.88,"Head":1.32,"Spine2":0.95},"anims":{"idle":"xbot:idle"}},"k":"idle","t":0.6},
+ {"spec":{"model":"Michelle.glb","height":1.0,"prop":{"UpLeg":0.78,"Arm":0.86,"Head":1.42,"Spine2":0.93},"anims":{"walk":"xbot:walk"}},"k":"walk","t":0.3},
+ {"spec":{"model":"readyplayer.me.glb","height":1.18,"prop":{"UpLeg":0.82,"Arm":0.88,"Head":1.3,"Spine2":0.95},"anims":{"idle":"xbot:idle"},"tint":{"Wolf3D_Head":"#c99a78","Wolf3D_Body":"#c99a78"},"colors":{"Wolf3D_Beard":null,"Wolf3D_Headwear":"#d04a3a","Wolf3D_Outfit_Top":"#3a8ad8","Wolf3D_Outfit_Bottom":"#e8c84a"}},"k":"idle","t":1.0},
+ {"spec":{"model":"readyplayer.me.glb","height":1.8,"anims":{"idle":"xbot:idle"},"colors":{"Wolf3D_Headwear":"#2b2b2b","Wolf3D_Outfit_Top":"#1f8a70","Wolf3D_Outfit_Bottom":"#2f3a55"}},"k":"idle","t":1.0}]

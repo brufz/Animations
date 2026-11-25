@@ -13,7 +13,7 @@ window.setup=async(o)=>{
   const rim=new THREE.DirectionalLight(0xffe2c0,1.1);rim.position.set(2,3,8);sc.add(rim);
   const g=new THREE.Mesh(new THREE.PlaneGeometry(60,60),new THREE.ShadowMaterial({opacity:.33}));g.rotation.x=-Math.PI/2;g.receiveShadow=true;sc.add(g);
   window._o=o;
-  for(const a of o.actors){const X=await load(a.spec);X.obj.position.set(a.pos[0],X.obj.userData.y0,a.pos[2]);X.obj.rotation.y=a.rotY||0;sc.add(X.obj);X.a=a;A.push(X);}
+  for(const a of o.actors){const X=await load(a.spec);X.obj.position.set(a.keys[0][1],X.obj.userData.y0,a.keys[0][2]);X.obj.rotation.y=a.rotY||0;sc.add(X.obj);X.a=a;A.push(X);}
   return 1};
 // a.keys: [[t, x, z, rotY, anim, animT0]] — interpola posição/rotação; troca de animação com mistura de 0.3s
 window.frame=(t)=>{
