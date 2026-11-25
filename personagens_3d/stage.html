@@ -1,0 +1,29 @@
+<!DOCTYPE html><html><head><style>html,body{margin:0;background:transparent}</style>
+<script type="importmap">{"imports":{"three":"./build/three.module.js","three/addons/":"./examples/jsm/"}}</script></head><body>
+<script type="module">
+// Palco: elenco variado (cast.js) com a câmera dos cenários; atores com caminho, animação e virada
+import * as THREE from 'three';import {load,pose} from './cast.js';
+let r,sc,cam,sun,A=[];
+window.setup=async(o)=>{
+  r=new THREE.WebGLRenderer({antialias:true,alpha:true,preserveDrawingBuffer:true});r.setSize(o.w,o.h);r.setClearColor(0,0);
+  r.shadowMap.enabled=true;r.shadowMap.type=THREE.PCFSoftShadowMap;r.toneMapping=THREE.ACESFilmicToneMapping;r.toneMappingExposure=o.exposure||1.05;r.outputColorSpace=THREE.SRGBColorSpace;r.domElement.style.transform="scaleX(-1)";document.body.appendChild(r.domElement);
+  sc=new THREE.Scene();cam=new THREE.PerspectiveCamera(2*Math.atan(.5/o.span)*180/Math.PI,o.w/o.h,.05,200);cam.position.set(...o.camP);cam.lookAt(...o.camT);
+  sc.add(new THREE.HemisphereLight(0xe2efff,0x9a7058,1.7));
+  sun=new THREE.DirectionalLight(0xfff0dc,2.7);sun.castShadow=true;sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-5,right:5,top:5,bottom:-5});sun.shadow.bias=-.0005;sun.shadow.radius=4;sc.add(sun);sc.add(sun.target);
+  const rim=new THREE.DirectionalLight(0xffe2c0,1.1);rim.position.set(2,3,8);sc.add(rim);
+  const g=new THREE.Mesh(new THREE.PlaneGeometry(60,60),new THREE.ShadowMaterial({opacity:.33}));g.rotation.x=-Math.PI/2;g.receiveShadow=true;sc.add(g);
+  window._o=o;
+  for(const a of o.actors){const X=await load(a.spec);X.obj.position.set(a.pos[0],X.obj.userData.y0,a.pos[2]);X.obj.rotation.y=a.rotY||0;sc.add(X.obj);X.a=a;A.push(X);}
+  return 1};
+// a.keys: [[t, x, z, rotY, anim, animT0]] — interpola posição/rotação; troca de animação com mistura de 0.3s
+window.frame=(t)=>{
+  for(const X of A){const K=X.a.keys;let i=0;while(i<K.length-1&&K[i+1][0]<=t)i++;
+    const k=K[i],n=K[Math.min(i+1,K.length-1)];const u=n[0]>k[0]?Math.min(1,Math.max(0,(t-k[0])/(n[0]-k[0]))):0;
+    const lerp=(a,b)=>a+(b-a)*u;X.obj.position.x=lerp(k[1],n[1]);X.obj.position.z=lerp(k[2],n[2]);
+    const ru=Math.min(1,(t-k[0])/0.35);X.obj.rotation.y=(i>0?K[i-1][3]:k[3])+(k[3]-(i>0?K[i-1][3]:k[3]))*Math.max(0,ru);
+    const pk=i>0?K[i-1]:null;const w=pk&&pk[4]!==k[4]?Math.max(0,1-(t-k[0])/0.3):0;
+    if(w>0)pose(X,k[4],(t-k[0])+(k[5]||0),pk[4],(t-pk[0])+(pk[5]||0),w);else pose(X,k[4],(t-k[0])+(k[5]||0));}
+  const L=_o.Ldir;sun.target.position.set(0,0,-1);sun.position.set(L[0]*10,L[1]*10,L[2]*10-1);
+  r.render(sc,cam);return 1};
+window.ok=1;
+</script></body></html>

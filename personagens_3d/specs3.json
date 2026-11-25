@@ -1,0 +1,6 @@
+[{"spec":{"model":"Michelle.glb","height":1.64,"anims":{"idle":"xbot:idle"}},"k":"idle","t":0.6},
+ {"spec":{"model":"readyplayer.me.glb","height":1.8,"anims":{"agree":"xbot:agree"},"colors":{"Wolf3D_Headwear":null,"Wolf3D_Outfit_Top":"#1f8a70","Wolf3D_Outfit_Bottom":"#2f3a55"}},"k":"agree","t":0.9},
+ {"spec":{"model":"readyplayer.me.glb","height":1.76,"anims":{"walk":"xbot:walk"},"tint":{"Wolf3D_Skin":"#7a4a30","Wolf3D_Body":"#7a4a30"},"colors":{"Wolf3D_Beard":null,"Wolf3D_Headwear":null,"Wolf3D_Outfit_Top":"#e8d8b0","Wolf3D_Outfit_Bottom":"#6b4a32"}},"k":"walk","t":0.4},
+ {"spec":{"model":"Michelle.glb","height":1.64,"anims":{"walk":"xbot:walk"}},"k":"walk","t":0.2,"rot":0.6},
+ {"spec":{"model":"readyplayer.me.glb","height":1.82,"anims":{"hs":"xbot:headshake"},"tint":{"Wolf3D_Skin":"#f0c8a8","Wolf3D_Body":"#f0c8a8"},"colors":{"Wolf3D_Outfit_Top":"#c0392b","Wolf3D_Outfit_Bottom":"#e9e4d8","Wolf3D_Headwear":"#e9e4d8"}},"k":"hs","t":0.8},
+ {"spec":{"model":"readyplayer.me.glb","height":1.74,"anims":{"idle":"xbot:idle"},"tint":{"Wolf3D_Skin":"#a8714d","Wolf3D_Body":"#a8714d"},"colors":{"Wolf3D_Headwear":null,"Wolf3D_Outfit_Top":"#3a6fd8","Wolf3D_Outfit_Bottom":"#3b3b3b"}},"k":"idle","t":1.5,"rot":-0.4}]

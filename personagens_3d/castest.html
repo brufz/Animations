@@ -1,0 +1,13 @@
+<!DOCTYPE html><html><head><style>html,body{margin:0;background:#dfe9ef}</style>
+<script type="importmap">{"imports":{"three":"./build/three.module.js","three/addons/":"./examples/jsm/"}}</script></head><body>
+<script type="module">
+import * as THREE from 'three';import {load,pose} from './cast.js';
+let r,sc,cam;
+window.setup=(o)=>{r=new THREE.WebGLRenderer({antialias:true,preserveDrawingBuffer:true});r.setSize(o.w,o.h);r.shadowMap.enabled=true;r.shadowMap.type=THREE.PCFSoftShadowMap;r.toneMapping=THREE.ACESFilmicToneMapping;r.outputColorSpace=THREE.SRGBColorSpace;document.body.appendChild(r.domElement);
+  sc=new THREE.Scene();sc.background=new THREE.Color(0xdfe9ef);cam=new THREE.PerspectiveCamera(o.fov||28,o.w/o.h,.05,100);cam.position.set(...o.camP);cam.lookAt(...o.camT);
+  sc.add(new THREE.HemisphereLight(0xe6f2ff,0x8a6a50,1.6));const d=new THREE.DirectionalLight(0xfff1dd,2.6);d.position.set(-3,6,5);d.castShadow=true;d.shadow.mapSize.set(2048,2048);d.shadow.camera.left=-8;d.shadow.camera.right=8;d.shadow.camera.top=8;d.shadow.camera.bottom=-8;sc.add(d);
+  const g=new THREE.Mesh(new THREE.PlaneGeometry(40,40),new THREE.MeshStandardMaterial({color:0xcaa58a}));g.rotation.x=-Math.PI/2;g.receiveShadow=true;sc.add(g);return 1};
+window.add=async(spec,x,k1,t1,rotY)=>{try{const A=await load(spec);A.obj.position.set(x,A.obj.userData.y0,0);A.obj.rotation.y=rotY||0;sc.add(A.obj);if(k1)pose(A,k1,t1||0);
+  const names=[];A.obj.traverse(o=>{if(o.isMesh)names.push(o.name)});return names.join(',');}catch(e){return 'ERR '+e.message}};
+window.snap=()=>{r.render(sc,cam);return 1};window.ok=1;
+</script></body></html>
