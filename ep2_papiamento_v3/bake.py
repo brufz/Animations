@@ -88,8 +88,10 @@ def happy_states(): return {'base': dict(smile=1), 'blink': dict(smile=1, blink=
 def bake_park(pw):
     camA = Cam([0.3, 1.05, -8], [0.3, 1.45, 10], 1.25)
     camB = Cam([-1.7, 1.25, -7.2], [1.3, 1.4, 10], 1.25)
+    camE = Cam([0.6, 1.3, -4.5], [-1.6, 4.2, 30], 1.15)
+    camC = Cam([-1.0, 0.95, -6.5], [-3.4, 6.0, 30], 1.2)
     out = {}
-    for tag, cam, sun in [('A', camA, 0), ('B', camB, 0), ('S', camA, 1)]:
+    for tag, cam, sun in [('A', camA, 0), ('B', camB, 0), ('S', camA, 1), ('E', camE, 0), ('C', camC, 0)]:
         lt = dict(Ldir=[-.55, .62, -.45], Lcol=[1.08, .92, .74], Acol=[.5, .6, .8]) if not sun else dict(Ldir=[-.8, .32, -.35], Lcol=[1.25, .78, .5], Acol=[.45, .42, .62], sunset=1)
         base = dict(cam.args(), w=PW, h=H, **lt)
         L = {}
@@ -103,15 +105,22 @@ def bake_park(pw):
         L['wheel'] = dict(frames=wf, par=.22)
         out[tag] = L
     S = {}
-    S['A'] = dict(mae=sprite(pw, 'pkA', camA, 'mae', 'mae', [-0.72, 0, -0.6], -.5, dict(lookX=1), happy_states()),
-                  filha=sprite(pw, 'pkA', camA, 'filha', 'filha', [-0.12, 0, -1.75], -.65, dict(lookX=1, lookY=.3), happy_states()),
-                  guia=sprite(pw, 'pkA', camA, 'guia', 'guia', [1.05, 0, -1.3], .6, dict(lookX=-1, smile=1), wave_states()))
+    def walk_states(side_open=1):
+        st = {}
+        for i in range(8):
+            a = math.sin(i / 8 * 2 * math.pi)
+            st[f'k{i}'] = dict(walk=i / 8, yawAdd=-.55, fwdL=.3 * a, fwdR=-.3 * a, aL=.08, aR=.08, bL=.25, bR=.25, smile=side_open, lookX=0)
+        return st
+    S['A'] = dict(mae=sprite(pw, 'pkA', camA, 'mae', 'mae', [-0.72, 0, -0.6], -.5, dict(lookX=1), {**happy_states(), **walk_states()}),
+                  filha=sprite(pw, 'pkA', camA, 'filha', 'filha', [-0.12, 0, -1.75], -.65, dict(lookX=1, lookY=.3), {**happy_states(), **walk_states()}),
+                  guia=sprite(pw, 'pkA', camA, 'guia', 'guia', [1.05, 0, -1.3], .6, dict(lookX=-1, smile=1), happy_states()))
     S['B'] = dict(mae=sprite(pw, 'pkB', camB, 'mae', 'mae', [-1.55, 0, -4.6], math.pi - .35, {}, {'base': {}}),
                   filha=sprite(pw, 'pkB', camB, 'filha', 'filha', [-1.3, 0, -2.7], math.pi - .7, {}, {'base': dict(aR=.9, bR=.3)}),
-                  guia=sprite(pw, 'pkB', camB, 'guia', 'guia', [-0.4, 0, -1.6], -.25, dict(lookX=-.6), wave_states(talk=True)))
-    S['S'] = dict(mae=sprite(pw, 'pkS', camA, 'mae', 'mae', [-0.72, 0, -0.6], -.3, dict(lookX=.3, smile=1), wave_states('w', 6, False, 'L', 1)),
-                  filha=sprite(pw, 'pkS', camA, 'filha', 'filha', [-0.12, 0, -1.75], -.2, dict(smile=1), wave_states('w', 6, False, 'R', 1)),
-                  guia=sprite(pw, 'pkS', camA, 'guia', 'guia', [1.05, 0, -1.3], .35, dict(lookX=-.4, smile=1), wave_states()))
+                  guia=sprite(pw, 'pkB', camB, 'guia', 'guia', [-0.4, 0, -1.6], -.25, dict(lookX=-.6), {**talk_states(), **wave_states(talk=True)}))
+    S['C'] = dict(filha=sprite(pw, 'pkC', camC, 'filha', 'filha', [-1.5, 0, -2.9], math.pi + .2, dict(headN=-1), {'up': dict(aL=.92, aR=.92, bL=.15, bR=.15), 'mid': dict(aL=.6, aR=.6, bL=.4, bR=.4)}))
+    S['S'] = dict(mae=sprite(pw, 'pkS', camA, 'mae', 'mae', [-0.72, 0, -0.6], -.3, dict(lookX=.3, smile=1), {**happy_states(), **wave_states('w', 6, False, 'L', 1)}),
+                  filha=sprite(pw, 'pkS', camA, 'filha', 'filha', [-0.12, 0, -1.75], -.2, dict(smile=1), {**happy_states(), **wave_states('w', 6, False, 'R', 1)}),
+                  guia=sprite(pw, 'pkS', camA, 'guia', 'guia', [1.05, 0, -1.3], .35, dict(lookX=-.4, smile=1), {**happy_states(), **wave_states(base_open=1)}))
     MAN['park'] = dict(layers=out, sprites=S); save()
 def bake_water(pw):
     lt = dict(useGround=0, Ldir=[-.45, .75, -.5], Lcol=[1.15, 1., .85], Acol=[.5, .62, .85], fogK=.008, fogStart=20)

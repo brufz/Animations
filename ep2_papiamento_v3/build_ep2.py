@@ -47,7 +47,9 @@ function layer(S,L,par){return img(S,L.src,-M,0,par??L.par)}
 function frames(S,list,x,y,par,extra={}){const its=list.map((f,i)=>{const it=img(S,f,x,y,par,extra);it.e.style.visibility=i?'hidden':'visible';return it});const g={its,cur:0,set(i){if(i===this.cur)return;this.its[this.cur].e.style.visibility='hidden';this.its[i].e.style.visibility='visible';this.cur=i}};return g}
 function sprite(S,sp,extra={}){const keys=Object.keys(sp.frames);const g=frames(S,keys.map(k=>sp.frames[k]),sp.x-M,sp.y,sp.par,extra);g.keys=keys;g.pick=function(k){const i=this.keys.indexOf(k);this.set(i<0?0:i)};return g}
 function div(S,cls,html,x,y,par=1){const e=document.createElement('div');e.className=cls;e.innerHTML=html;e.style.left=x+'px';e.style.top=y+'px';S.el.appendChild(e);const it={e,x,y,par,isDiv:1};S.items.push(it);return it}
-function placeAll(S,camX){S.items.forEach(it=>{it.e.style.transform=(it.isDiv?'translate(-50%,-100%) ':'')+(it.extra||'');it.e.style.left=(it.x+camX*it.par)+'px'})}
+function placeAll(S,camX){S.items.forEach(it=>{it.e.style.transform=(it.isDiv?'translate(-50%,-100%) ':'')+(it.extra||'');it.e.style.left=(it.x+(it.dx||0)+camX*it.par)+'px';if(it.dy!==undefined)it.e.style.top=(it.y+it.dy)+'px'})}
+function shift(g,dx,dy){g.its.forEach(it=>{it.dx=dx;it.dy=dy})}
+function walkIn(g,t,t0,t1,dist,seed){const k=prog(t,t0,t1);shift(g,-dist*(1-eout(k)),k<1?-Math.abs(Math.sin(t*9))*8:0);if(k<1)g.pick('k'+(Math.floor(t*10+seed)%8));else happy(g,t,seed)}
 // ---- comportamentos dos bonecos
 function blinkK(t,seed){const p=3.1+seed*.7;return ((t+seed*1.3)%p)<.13}
 function happy(g,t,seed){g.pick(blinkK(t,seed)?'blink':'base')}
@@ -67,11 +69,15 @@ function parkScene(t0,t1,tag,spr,camKeys,upd,warm){return scene(t0,t1,S=>{const 
   layer(S,L.sky);S.wh=frames(S,L.wheel.frames,-M,0,L.wheel.par);layer(S,L.far);layer(S,L.near);
   S.g={};spr.forEach(([k,ex])=>{S.g[k]=sprite(S,P.sprites[tag][k],ex||{})});layer(S,L.fg);
   if(warm)S.el.style.filter='saturate(1.08) contrast(1.03)';
-},(S,t,T)=>{placeAll(S,kf(t,camKeys));S.wh.set(Math.floor(T*7.6)%16);upd(S,t,T)})}
-// 0 GANCHO — parque
-parkScene(PB[0][0],PB[0][1],'A',[['mae'],['filha'],['guia']],[[0,55],[8.7,-55]],(S,t,T)=>{happy(S.g.mae,t,0);happy(S.g.filha,t,1);wave(S.g.guia,t,false)});
+},(S,t,T)=>{upd(S,t,T);placeAll(S,kf(t,camKeys));S.wh.set(Math.floor(T*7.6)%16)})}
+// 0a GANCHO — só o parque (plano de abertura)
+parkScene(PB[0][0],3.71,'E',[],[[0,60],[3.71,-20]],(S,t,T)=>{});
+// 0b as pessoas no parque
+parkScene(3.71,PB[0][1],'A',[['mae'],['filha'],['guia']],[[0,40],[5,-40]],(S,t,T)=>{walkIn(S.g.mae,t,0,3.2,720,0);walkIn(S.g.filha,t,.2,3.4,760,3);happy(S.g.guia,t,2)});
 // 1 BON BINI — ombro da mãe, guia acenando e falando
-parkScene(PB[1][0],PB[1][1],'B',[['guia'],['mae',{filter:'blur(7px)'}]],[[0,-45],[7.5,45]],(S,t,T)=>{wave(S.g.guia,t,T<12.8||(T>13.2&&T<16));S.g.mae.its[0].par=1.5});
+parkScene(PB[1][0],12.9,'B',[['guia'],['mae',{filter:'blur(7px)'}]],[[0,-45],[7.5,45]],(S,t,T)=>{if(T>10.35&&T<12.1)wave(S.g.guia,T,T>10.5&&T<11.2);else talk(S.g.guia,t,false,1);S.g.mae.its[0].par=1.5});
+// 1b a filha olha a roda-gigante e pula de alegria
+parkScene(12.9,PB[1][1],'C',[['filha']],[[0,-35],[3.3,35]],(S,t,T)=>{const j=Math.abs(Math.sin(t*5.2));S.g.filha.pick(j>.45?'up':'mid');shift(S.g.filha,0,-j*38)});
 // 2 MAPA DO CARIBE (varredura lateral Aruba -> Curaçao -> Bonaire)
 scene(PB[2][0],PB[2][1],S=>{S.map=img(S,CB.src.replace('.png','.jpg'),0,0,0);S.bl=img(S,'mapa_caribe_blur.jpg',0,0,0,{webkitMaskImage:'linear-gradient(to bottom,#000 0%,rgba(0,0,0,0) 30%,rgba(0,0,0,0) 62%,#000 92%)'});
   const L=CB.labels;S.la=div(S,'tag','ARUBA',L.aruba[0],L.aruba[1]-40,0);S.lc=div(S,'tag','CURAÇAO',L.curacao[0],L.curacao[1]-40,0);S.lb=div(S,'tag','BONAIRE',L.bonaire[0],L.bonaire[1]-40,0);
@@ -121,7 +127,7 @@ scene(PB[7][0],PB[7][1],S=>{const L=SL.layers.W,Sp=SL.sprites;layer(S,L.room);
 scene(PB[8][0],PB[8][1],S=>{const L=C.layers.B,Sp=C.sprites.B;layer(S,L.far);layer(S,L.near);S.g={};['local','senhor','moca','rapaz','menino'].forEach(k=>S.g[k]=sprite(S,Sp[k]));layer(S,L.fg);
 },(S,t,T)=>{placeAll(S,kf(t,[[0,-50],[10.3,50]]));talk(S.g.moca,t,(t%3.2)<1.6,0);happy(S.g.rapaz,t,1);talk(S.g.local,t,((t+1.6)%3.2)<1.6,2);happy(S.g.senhor,t,3);wave(S.g.menino,t,false)});
 // 9 FINAL — pôr do sol no parque, todos dando tchau
-parkScene(PB[9][0],PB[9][1],'S',[['mae',{filter:'sepia(.18) saturate(1.1) brightness(.97)'}],['filha',{filter:'sepia(.18) saturate(1.1) brightness(.97)'}],['guia',{filter:'sepia(.18) saturate(1.1) brightness(.97)'}]],[[0,50],[9.6,-50]],(S,t,T)=>{wave(S.g.mae,t+.3);wave(S.g.filha,t);wave(S.g.guia,t+.6)},true);
+parkScene(PB[9][0],PB[9][1],'S',[['mae',{filter:'sepia(.18) saturate(1.1) brightness(.97)'}],['filha',{filter:'sepia(.18) saturate(1.1) brightness(.97)'}],['guia',{filter:'sepia(.18) saturate(1.1) brightness(.97)'}]],[[0,50],[9.6,-50]],(S,t,T)=>{const w=T>72.55;if(w){wave(S.g.mae,T+.3);wave(S.g.filha,T);wave(S.g.guia,T+.6)}else{happy(S.g.mae,t,0);happy(S.g.filha,t,1);happy(S.g.guia,t,2)}},true);
 """
 TAIL = r"""
 // ---------- legendas
