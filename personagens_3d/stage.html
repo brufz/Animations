@@ -34,11 +34,11 @@ function aim(b,c,dirW,w){X0.obj.updateMatrixWorld(true);b.getWorldPosition(_v);c
   const wq=b.getWorldQuaternion(new THREE.Quaternion());const nw=q.multiply(wq);b.parent.getWorldQuaternion(_p);b.quaternion.copy(_p.invert().multiply(nw));}
 let X0;
 // mão reta em relação ao antebraço e palma virada para a frente
-function palm(X,sd,H,loc,w){X.obj.traverse(o=>{if(o.isBone&&o.userData.r&&new RegExp(sd+'Hand(Thumb|Index|Middle|Ring|Pinky)').test(o.name))o.quaternion.slerp(o.userData.r[1],w*(/Thumb/.test(o.name)?.6:.9))});const kid=bone(X,sd+'HandMiddle1'),i1=bone(X,sd+'HandIndex1'),p1=bone(X,sd+'HandPinky1'),FA=bone(X,sd+'ForeArm');if(!kid||!i1||!p1)return;
+function palm(X,sd,H,loc,w,tgt,fw){X.obj.traverse(o=>{if(o.isBone&&o.userData.r&&new RegExp(sd+'Hand(Thumb|Index|Middle|Ring|Pinky)').test(o.name))o.quaternion.slerp(o.userData.r[1],w*(fw??1)*(/Thumb/.test(o.name)?.6:.9))});const kid=bone(X,sd+'HandMiddle1'),i1=bone(X,sd+'HandIndex1'),p1=bone(X,sd+'HandPinky1'),FA=bone(X,sd+'ForeArm');if(!kid||!i1||!p1)return;
   X0.obj.updateMatrixWorld(true);const pf=FA.getWorldPosition(new THREE.Vector3()),ph=H.getWorldPosition(new THREE.Vector3());aim(H,kid,ph.clone().sub(pf),w);
   X0.obj.updateMatrixWorld(true);const h=H.getWorldPosition(new THREE.Vector3()),m=kid.getWorldPosition(new THREE.Vector3()).sub(h).normalize();
   const a=i1.getWorldPosition(new THREE.Vector3()).sub(h),b=p1.getWorldPosition(new THREE.Vector3()).sub(h);let n=new THREE.Vector3().crossVectors(a,b).normalize();if(sd==='Left')n.negate();if(window.PALMSIGN)n.negate();
-  const f=loc(0,0,1);const pn=n.clone().sub(m.clone().multiplyScalar(n.dot(m))).normalize(),pfw=f.clone().sub(m.clone().multiplyScalar(f.dot(m))).normalize();
+  const f=tgt||loc(0,0,1);const pn=n.clone().sub(m.clone().multiplyScalar(n.dot(m))).normalize(),pfw=f.clone().sub(m.clone().multiplyScalar(f.dot(m))).normalize();
   let ang=Math.acos(Math.max(-1,Math.min(1,pn.dot(pfw))));if(new THREE.Vector3().crossVectors(pn,pfw).dot(m)<0)ang=-ang;
   const q=new THREE.Quaternion().setFromAxisAngle(m,ang*w);const wq=H.getWorldQuaternion(new THREE.Quaternion());const nw=q.multiply(wq);H.parent.getWorldQuaternion(_p);H.quaternion.copy(_p.invert().multiply(nw));}
 function inWin(t,W){if(!W)return null;for(const w of W)if(t>=w[0]-0.35&&t<=w[1]+0.35)return [w,Math.min(1,(t-w[0]+0.35)/0.35,(w[1]+0.35-t)/0.35)];return null}
@@ -48,6 +48,15 @@ function fx(X,t){X0=X;const F=X.a.fx||{};const ry=X.obj.rotation.y;const loc=(x,
       const ph=Math.sin(t*(ex?7:9)+(sd==='Left'?1.3:0));
       aim(A,FA,loc(sg*(ex?.55:.7),ex?.85:.45,.15),k);aim(FA,H,loc(sg*(.1+.22*ph),1,.12),k);palm(X,sd,H,loc,k);}}
   const H=inWin(t,F.hop);if(H){const [w,k]=H;const ph=Math.abs(Math.sin((t-w[0])*Math.PI*(w[3]||2.4)));X.obj.position.y+=k*(w[2]||.1)*ph;}
+  // vida: cabeça olhando ao redor, coluna trocando o peso, gestos ao falar
+  const sd=X.a.seed??(X.a.keys[0][5]||0)*7.3;const TK=inWin(t,F.talk);const tk=TK?TK[1]:0;const L=F.live??1;
+  const hd=bone(X,'Head'),sp=bone(X,'Spine1'),nk=bone(X,'Neck');
+  if(hd&&L){const yaw=(.13*Math.sin(.45*t+sd)+.05*Math.sin(1.27*t+2*sd))*L+(F.lookYaw||0),pit=(.04*Math.sin(.6*t+sd*1.7))*L+tk*(.06*Math.sin(5.5*t)+.03)+(F.lookDown||0),rol=.04*Math.sin(.33*t+sd)*L;
+    const e=new THREE.Euler(window.AX?pit*window.AX[0]:pit,window.AX?yaw*window.AX[1]:yaw,window.AX?rol*window.AX[2]:rol,'YXZ');hd.quaternion.multiply(new THREE.Quaternion().setFromEuler(e));}
+  if(sp&&L){const e=new THREE.Euler(0,.05*Math.sin(.3*t+sd)*L,.035*Math.sin(.38*t+sd*1.3)*L);sp.quaternion.multiply(new THREE.Quaternion().setFromEuler(e));}
+  if(tk>0&&!W){for(const s2 of ['Right','Left']){const sg=s2==='Right'?-1:1;const AR=bone(X,s2+'Arm'),FA=bone(X,s2+'ForeArm'),HH=bone(X,s2+'Hand');if(!FA)continue;
+      const ph=Math.sin(t*3.1+(s2==='Left'?1.9:0)+sd),ph2=Math.sin(t*1.7+sd*2);const amp=s2==='Right'?1:.6;
+      aim(AR,FA,loc(sg*(.32+.1*ph2),-1,.3),tk*.5*amp);aim(FA,HH,loc(sg*(.45+.25*ph2),.1+.5*Math.max(0,ph)*amp,.7),tk*.85*amp);palm(X,s2,HH,loc,tk*.8*amp,loc(-sg*.4,1,0),.5);}}
   // rosto (morph targets de quem tiver)
   let mo=0;const T=inWin(t,F.talk);if(T){const n=Math.sin(t*23)*.5+Math.sin(t*14.3)*.5;mo=T[1]*Math.max(0,n)*.75;}
   X.obj.traverse(o=>{if(o.morphTargetDictionary){const d=o.morphTargetDictionary;if(d.mouthOpen!==undefined)o.morphTargetInfluences[d.mouthOpen]=mo;if(d.mouthSmile!==undefined)o.morphTargetInfluences[d.mouthSmile]=F.smile||0;}});}

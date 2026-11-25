@@ -17,7 +17,7 @@ SUN = dict(Ldir=[-.8, .32, -.35], light=dict(sunC=0xffb878, sunI=2.4, sky=0xffd8
 def act(who, keys, **fx): return dict(who=who, keys=keys, fx=fx)
 SC = {
  'A': dict(t0=3.71, t1=8.68, cam=camA, **DAY, actors=[
-   act('mae', [[0, -3.4, -0.5, face(1, 0), 'walk'], [3.0, -0.85, -0.5, face(1.77, -0.7), 'idle']]),
+   act('mae', [[0, -3.4, -0.5, face(1, 0), 'walk'], [3.0, -0.85, -0.5, face(1.77, -0.7), 'idle']], talk=[[3.3, 4.97]]),
    act('filho', [[0, -3.9, -1.2, face(1, 0), 'walk', .6], [3.4, -0.4, -1.2, face(1, -.25), 'idle', .8]]),
    act('filha', [[0, -2.9, -1.7, face(1, 0), 'walk', .3], [3.2, 0.1, -1.7, face(1.2, .25), 'idle', .4]]),
    act('guia', [[0, 1.05, -1.3, face(-1, -.3), 'idle', .4], [2.9, 1.05, -1.3, face(-1, -.45), 'agree'], [4.97, 1.05, -1.3, face(-1, -.45), 'agree']], smile=.6)]),
@@ -46,11 +46,11 @@ SC.update({
    act('filha', [[0, 0.75, -1.9, face(-1, -.45), 'idle', .5]]),
    act('local', [[0, -0.6, -1.3, face(1.3, -.7), 'idle', .1]], smile=.5, talk=[[1.2, 2.9]], wave=[[.9, 2.6, 'Right']])]),
  'caB': dict(t0=55.65, t1=65.96, cam=camWB, **CAIS, actors=[
-   act('menino', [[0, 3.35, -2.3, face(0, -1), 'idle', .2]], wave=[[0, 10.31, 'Right']]),
-   act('moca', [[0, 2.0, -1.2, face(.9, -.45), 'idle', .4]], talk=alt(0, 0, 10.31)),
-   act('rapaz', [[0, 2.75, -1.5, face(-.9, -.25), 'idle', 1.0]], smile=.6, talk=alt(1.6, 0, 10.31)),
-   act('local', [[0, 4.0, -0.7, face(.8, -.45), 'idle', .7]], smile=.3, talk=alt(1.6, 0, 10.31)),
-   act('senhor', [[0, 4.6, -0.95, face(-.8, -.2), 'idle', 1.3]], smile=.7, talk=alt(0, 0, 10.31))]),
+   act('menino', [[0, 0.9, -2.5, face(1, -.15), 'idle', .2], [4.0, 0.9, -2.5, face(1, -.15), 'walk', .2], [6.6, 3.35, -2.4, face(.2, -1), 'idle', .3]], wave=[[8.2, 9.6, 'Right']]),
+   act('moca', [[0, 2.0, -1.2, face(.9, -.45), 'idle', .4]], talk=[[0, 1.8], [3.6, 5.6], [7.4, 9.2]]),
+   act('rapaz', [[0, 2.75, -1.5, face(-.9, -.25), 'idle', 1.0], [1.9, 2.75, -1.5, face(-.9, -.25), 'idle', 1.0]], smile=.6, talk=[[1.9, 3.4], [5.8, 7.2], [9.4, 10.31]]),
+   act('local', [[0, 4.0, -0.7, face(.8, -.45), 'idle', .7]], smile=.3, talk=[[.4, 2.6], [4.6, 6.4], [8.4, 10.31]]),
+   act('senhor', [[0, 4.6, -0.95, face(-.8, -.2), 'idle', 1.3], [.8, 4.6, -0.95, face(-.8, -.2), 'agree'], [2.6, 4.6, -0.95, face(-.8, -.2), 'idle', .2], [4.8, 4.6, -0.95, face(-.8, -.2), 'agree'], [6.4, 4.6, -0.95, face(-.8, -.2), 'idle', .5]], smile=.7, talk=[[2.8, 4.4], [6.6, 8.2]])]),
  'slW': dict(t0=48.5, t1=55.65, cam=camSL, **SALA, actors=[
    act('canto', [[0, -2.75, 5.45, face(-.25, 1), 'idle', .2]], back=1),
    act('prof', [[0, -0.8, 4.85, face(.05, -1), 'idle', .5]], talk=[[.2, 3.9]], back=1),
