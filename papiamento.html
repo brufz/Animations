@@ -648,6 +648,7 @@ SCENES.forEach(S=>S.world.remove());SCENES.length=0;
 const PAL_CW=['#f6c445','#f28fa5','#7fd1c7','#6fa8dc','#f39c4a','#efe6cc','#b5e08a','#e9a0d8'];
 const kfu=(t,D,keys,e)=>kf(t/D,keys,e); // keyframes em fração da cena (0..1)
 
+animCrowd=function(){};
 // ---------- arte: parque ----------
 function coasterSVG(w,h){
   const d=`M-40,${h*.78} C${w*.12},${h*.78} ${w*.16},${h*.18} ${w*.3},${h*.2} S${w*.42},${h*.75} ${w*.52},${h*.7} S${w*.6},${h*.3} ${w*.7},${h*.32} S${w*.8},${h*.62} ${w*.9},${h*.55} S${w*1.02},${h*.4} ${w+60},${h*.45}`;
@@ -694,7 +695,7 @@ function parkWorld(w,S,{gate=true}={}){
   S.flags=plane(w,flagsRow(1500,420,6,10),{y:1300,z:-950,w:1500,h:420});
   plane(w,svg(1700,700,`<rect width="1700" height="700" fill="#cdb99a"/><rect width="1700" height="18" fill="#b9a383"/>${Array.from({length:40},(_,i)=>`<rect x="${(i*137)%1700}" y="${40+(i*61)%640}" width="70" height="8" rx="4" fill="#bca582"/>`).join('')}`),{y:1750,z:-700,w:1700,h:700});
   if(gate)S.gate=plane(w,gateSVG(),{y:1180,z:-620,w:1000,h:760,shadow:26});
-  S.crowd=plane(w,svg(1400,320,crowd(1400,300,13,77,1.35,.8)),{y:1700,z:-360,w:1400,h:320});
+  S.crowd=plane(w,svg(1400,320,crowd(1400,300,13,77,1.35,0)),{y:1700,z:-360,w:1400,h:320});
 }
 function parkUpdate(S,t){
   const tr=S.coaster.querySelector('#ctrack'),L=tr.getTotalLength(),p=((t*.12)%1)*L,a=tr.getPointAtLength(p),b=tr.getPointAtLength(Math.min(L,p+4));
@@ -702,10 +703,10 @@ function parkUpdate(S,t){
   placeCabins(S.wheel,t,S.wh.cx,S.wh.cy,S.wh.R);
   S.flags.querySelector('svg').outerHTML; // (ondulação leve via transform abaixo)
   move(S.flags,0,0,0,`skewX(${Math.sin(t*3)*1.5}deg)`);
-  animCrowd(S.crowd,t);move(S.crowd,0,-Math.abs(Math.sin(t*5))*8);
+  animCrowd(S.crowd,t);move(S.crowd,0,Math.sin(t*1.5)*3);
 }
 // 1. GANCHO — o parque que "fala" uma língua do Caribe
-scene(PB[0][0],PB[0][1],(w,S)=>{parkWorld(w,S);
+scene(PB[0][0],PB[0][1],(w,S)=>{parkWorld(w,S,{gate:false});
   S.ask=plane(w,`<div style="font-family:RB;font-weight:900;font-stretch:78%;font-size:120px;color:#ffc531;-webkit-text-stroke:12px #14110f;paint-order:stroke fill;text-align:center">?</div>`,{x:860,y:520,z:-400,w:200,h:160});
 },(S,t)=>{const D=S.t1-S.t0;
   cam(S.world,{z:kfu(t,D,[[0,-150],[1,420]],x=>x),y:kfu(t,D,[[0,80],[1,-20]]),ry:kfu(t,D,[[0,-6],[1,5]]),rx:kfu(t,D,[[0,3],[1,-1]])});
@@ -713,14 +714,9 @@ scene(PB[0][0],PB[0][1],(w,S)=>{parkWorld(w,S);
 });
 // 2. PALAVRAS — bon bini / hopi hari
 scene(PB[1][0],PB[1][1],(w,S)=>{parkWorld(w,S,{gate:false});
-  S.c1=plane(w,wordCard('BON BINI','bem-vindo'),{y:560,z:-300,w:760,h:230});
-  S.c2=plane(w,wordCard('HOPI HARI','muita alegria','#7fd1c7'),{y:880,z:-300,w:760,h:230});
 },(S,t)=>{const D=S.t1-S.t0;
   cam(S.world,{x:kfu(t,D,[[0,-80],[1,80]]),z:kfu(t,D,[[0,120],[1,360]]),ry:kfu(t,D,[[0,6],[1,-5]])});
   parkUpdate(S,t);
-  const k1=eback(prog(t/D,.06,.2)),k2=eback(prog(t/D,.55,.68));
-  S.c1.style.opacity=k1>0?1:0;move(S.c1,0,0,0,`scale(${Math.max(.01,k1)}) rotate(${-3+Math.sin(t*2)*1.5}deg)`);
-  S.c2.style.opacity=k2>0?1:0;move(S.c2,0,0,0,`scale(${Math.max(.01,k2)}) rotate(${3+Math.sin(t*2)*1.5}deg)`);
 });
 // 3. MAPA DO CARIBE (coordenadas reais)
 const CX=lon=>540+(lon+68.6)*150,CY=lat=>900-(lat-11.2)*150;
@@ -741,11 +737,10 @@ scene(PB[2][0],PB[2][1],(w,S)=>{
   S.map=plane(w,svg(1080,1920,caribMap()),{z:-600,w:1080,h:1920});
   S.cl=plane(w,svg(1400,2400,cloudsBody(1400,2400,10,57,0,2400,160,'#ffffff','#dfe8f2',.75)),{y:960,z:-200,w:1400,h:2400,blur:4});
   S.flag=plane(w,svg(240,160,dutchFlag(10,10,220,140,0)),{x:CX(-67.4),y:CY(13.1),z:-420,w:200,h:134,shadow:12});
-  S.word=plane(w,wordCard('PAPIÁ','falar  (papear!)','#f28fa5'),{y:400,z:-300,w:760,h:230});
 },(S,t)=>{const D=S.t1-S.t0;
   cam(S.world,{x:kfu(t,D,[[0,0],[1,(CX(-69.1)-540)*.75]]),y:kfu(t,D,[[0,200],[.5,-80],[1,(CY(12.25)-960)*.75]]),z:kfu(t,D,[[0,-250],[.5,350],[1,760]]),rx:kfu(t,D,[[0,0],[1,12]]),ry:kfu(t,D,[[0,-4],[1,4]])});
   move(S.cl,0,-t*50);S.flag.querySelector('svg').innerHTML=dutchFlag(10,10,220,140,Math.sin(t*5)*12);S.flag.style.opacity=prog(t/D,.5,.6);
-  const k=eback(prog(t/D,.08,.2));S.word.style.opacity=kfu(t,D,[[.05,0],[.08,1],[.45,1],[.5,0]]);move(S.word,0,0,0,`scale(${Math.max(.01,k)})`);
+  
   S.map.querySelectorAll('.isl').forEach((e,i)=>e.setAttribute('fill',mixc('#f08a24','#ffd27a',.5+.5*Math.sin(t*4+i))));
 });
 // 4. PORTO COLORIDO DE CURAÇAO — "bon dia, kon ta bai?"
@@ -764,7 +759,7 @@ scene(PB[3][0],PB[3][1],(w,S)=>{curacaoWorld(w,S);
   S.b2=plane(w,bubble('Bom dia, como vai?','#e4f4ff'),{x:640,y:830,z:-400,w:700,h:160});
 },(S,t)=>{const D=S.t1-S.t0;
   cam(S.world,{x:kfu(t,D,[[0,80],[1,-40]]),z:kfu(t,D,[[0,0],[1,300]]),ry:kfu(t,D,[[0,-5],[1,4]])});
-  move(S.boat,t*40,Math.sin(t*1.6)*5);setFrame(S.p,Math.floor(t*7)%3===0?0:Math.floor(t*7)%6);
+  move(S.boat,t*40,Math.sin(t*1.6)*5);setFrame(S.p,0);
   const k=eback(prog(t/D,.05,.18)),k2=eback(prog(t/D,.55,.66));
   S.b.style.opacity=k>0?1:0;move(S.b,0,0,0,`scale(${Math.max(.01,k)})`);S.b2.style.opacity=k2>0?1:0;move(S.b2,0,0,0,`scale(${Math.max(.01,k2)})`);
 });
@@ -825,25 +820,25 @@ scene(PB[7][0],PB[7][1],(w,S)=>{
   plane(w,svg(1800,1000,`<rect width="1800" height="1000" fill="#9c7f58"/>${Array.from({length:18},(_,i)=>`<rect x="${i*100}" y="0" width="6" height="1000" fill="#8a6e4a"/>`).join('')}`),{y:1760,z:-900,w:1800,h:1000});
   S.r1=plane(w,svg(1500,520,desks(1500,520,5,3,1.1)),{y:1180,z:-1000,w:1500,h:520});
   S.r2=plane(w,svg(1500,620,desks(1500,620,4,7,1.35)),{y:1330,z:-700,w:1500,h:620});
-  S.kid=plane(w,svg(240,400,sprImg('pv9',6,240,400,3,0,0,240,400)),{x:760,y:1420,z:-420,w:300,h:500});
+  S.kid=plane(w,svg(240,400,sprImg('pv9',6,240,400,0,0,0,240,400)),{x:760,y:1420,z:-420,w:300,h:500});
   S.bb=plane(w,bubble('Bon dia!'),{x:820,y:1080,z:-400,w:420,h:160});
   S.x=plane(w,`<div style="font-family:RB;font-weight:900;font-size:300px;color:#e0302a;-webkit-text-stroke:14px #14110f;paint-order:stroke fill;line-height:1">✕</div>`,{x:820,y:1080,z:-380,w:320,h:320});
 },(S,t)=>{const D=S.t1-S.t0;
   cam(S.world,{z:kfu(t,D,[[0,0],[1,280]]),x:kfu(t,D,[[0,-60],[1,60]]),ry:kfu(t,D,[[0,-5],[1,5]])});
   const k=eback(prog(t/D,.45,.55));S.bb.style.opacity=k>0?1:0;move(S.bb,0,0,0,`scale(${Math.max(.01,k)})`);
   const x=prog(t/D,.68,.74);S.x.style.opacity=x>0?1:0;move(S.x,0,0,0,`scale(${lerp(1.8,1,eout(x))}) rotate(${-8*x}deg)`);
-  setFrame(S.kid,t/D<.68?Math.floor(t*6)%6:0);move(S.kid,0,t/D>.74?kfu(t,D,[[.74,0],[1,30]]):0);
+  setFrame(S.kid,0);move(S.kid,0,t/D>.74?kfu(t,D,[[.74,0],[1,30]]):0);
 });
 // 9. NÃO ADIANTOU — 80% + oficial
 scene(PB[8][0],PB[8][1],(w,S)=>{curacaoWorld(w,S);
-  S.crowd=plane(w,svg(1500,360,crowd(1500,340,15,41,1.5,.9)),{y:1640,z:-420,w:1500,h:360});
+  S.crowd=plane(w,svg(1500,360,crowd(1500,340,15,41,1.5,0)),{y:1640,z:-420,w:1500,h:360});
   const ph=[['Bon dia!',-280,1000],['Kon ta bai?',260,940],['Danki!',-220,1200],['Bon bini!',290,1180],['Mi stima bo',20,1100]];
   S.bubs=ph.map(([tx,dx,y],i)=>{const e=plane(w,bubble(tx,['#fff','#ffe9a8','#d8f4ee','#ffd9e2','#e4f0ff'][i]),{x:540+dx,y,z:-500,w:520,h:150});e._d=i*.06;return e});
   S.s1=plane(w,stamp('OFICIAL · ARUBA 2003','#2a6fdb'),{y:640,z:-300,w:900,h:130});
   S.s2=plane(w,stamp('OFICIAL · CURAÇAO 2007','#2a6fdb'),{y:820,z:-300,w:960,h:130});
 },(S,t)=>{const D=S.t1-S.t0,u=t/D;
   cam(S.world,{z:kfu(t,D,[[0,0],[1,340]]),y:kfu(t,D,[[0,40],[1,-30]]),ry:kfu(t,D,[[0,4],[1,-4]])});
-  animCrowd(S.crowd,t);move(S.crowd,0,-Math.abs(Math.sin(t*5))*10);move(S.boat,t*40,Math.sin(t*1.6)*5);
+  move(S.crowd,0,Math.sin(t*1.5)*3);move(S.boat,t*40,Math.sin(t*1.6)*5);
   S.bubs.forEach(e=>{const k=eback(prog(u,.12+e._d,.2+e._d));const out=prog(u,.6,.66);e.style.opacity=k>0?1-out:0;move(e,0,Math.sin(t*2+e._d*20)*10,0,`scale(${Math.max(.01,k)})`)});
   [[S.s1,.66],[S.s2,.8]].forEach(([e,a])=>{const s=prog(u,a,a+.05);e.style.opacity=s>0?1:0;move(e,0,0,0,`rotate(-6deg) scale(${lerp(1.8,1,eout(s))})`)});
 });
