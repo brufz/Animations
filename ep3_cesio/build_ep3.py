@@ -35,7 +35,11 @@ function closeUp(S,n){plate(S,L(n).back,.2);plate(S,L(n).near,.5);plate(S,L(n).g
     S.sp.push({e,x:p[0]-M+Math.sin(i*12.9)*230,y:p[1]+Math.cos(i*7.7)*40,v:40+(i*13)%50,ph:i*.37,par:.5})}}
 function closeUpd(S,t,T,cx,k){pan(S,cx);const f=.78+.22*Math.sin(T*5.5)+.06*Math.sin(T*17);S.g.e.style.opacity=f*k;S.g2.e.style.opacity=f*.8*k;S.bl.e.style.opacity=.85*k;
   S.sp.forEach(s=>{const life=((t*.45+s.ph)%1);const y=s.y-life*s.v*6;s.e.style.left=(s.x+cx*s.par+Math.sin(T*1.7+s.ph*9)*18)+'px';s.e.style.top=y+'px';s.e.style.opacity=k*Math.sin(life*Math.PI)*(.6+.4*Math.sin(T*9+s.ph*20))})}
-SC(0,2.45,S=>closeUp(S,'hook'),(S,t,T)=>closeUpd(S,t,T,kf(t,[[0,45],[2.45,-35]]),1));
+SC(0,2.45,S=>{closeUp(S,'hook');S.fl=document.createElement('div');S.fl.style.cssText='position:absolute;inset:0;background:radial-gradient(circle at 50% 55%,rgba(200,245,255,1),rgba(90,180,255,.6) 35%,rgba(0,0,0,0) 75%);mix-blend-mode:screen;opacity:0';S.el.appendChild(S.fl);
+  S.dk=document.createElement('div');S.dk.style.cssText='position:absolute;inset:0;background:radial-gradient(circle at 45% 52%,rgba(0,8,20,.55),rgba(0,0,0,.97) 60%)';S.el.appendChild(S.dk)},
+ (S,t,T)=>{const ig=eout(prog(t,.32,1.05));closeUpd(S,t,T,kf(t,[[0,45],[2.45,-35]]),.15+.85*ig);
+  S.sp.forEach((s,i)=>{if(t<1.1){const b=eout(prog(t,.32,1.1));const ang=i*2.4,rr=b*(180+((i*53)%160));s.e.style.left=(parseFloat(s.e.style.left)+Math.cos(ang)*rr*.6)+'px';s.e.style.top=(parseFloat(s.e.style.top)-Math.abs(Math.sin(ang))*rr*.5)+'px';s.e.style.opacity=b*(1-prog(t,.9,1.4))+ (t>.9?0:0)}});
+  const fl=Math.max(0,Math.sin(Math.PI*prog(t,.3,.85)));S.dk.style.opacity=1-ig;S.fl.style.opacity=fl;S.g.extra=` scale(${.3+.7*ig+.25*Math.max(0,Math.sin(Math.PI*prog(t,.3,.8)))})`;S.el.style.filter=`brightness(${.3+.7*ig+1.1*fl}) saturate(${1+.3*ig})`});
 // 1 6 MIL TONELADAS
 SC(2.45,6.4,S=>{plate(S,L('tonel').bg,.6)},(S,t,T)=>{pan(S,kf(t,[[0,-40],[3.95,40]]))});
 // 2 MAPA — Goiânia, 1987
@@ -92,7 +96,7 @@ SC(57.8,62.2,S=>{plate(S,L('aterro').bg,.5);const p=PT('aterro').morro;S.t=tagAt
 SC(62.2,DURATION0,S=>closeUp(S,'fim'),(S,t,T)=>closeUpd(S,t,T,kf(t,[[0,-40],[4.5,40]]),1-prog(T,65.6,66.6)));
 """
 HUD = r"""
-const HUDS=[[0.25,2.4,'PÓ AZUL',T=>Math.round(19*eout(prog(T,.3,1.3)))+' g'],[2.9,6.3,'LIXO RADIOATIVO',T=>(Math.round(6000*eout(prog(T,3.0,4.6)))).toLocaleString('pt-BR')+' t'],
+const HUDS=[[0.75,2.4,'PÓ AZUL',T=>Math.round(19*eout(prog(T,.8,1.5)))+' g'],[2.9,6.3,'LIXO RADIOATIVO',T=>(Math.round(6000*eout(prog(T,3.0,4.6)))).toLocaleString('pt-BR')+' t'],
  [44.9,48.0,'PESSOAS EXAMINADAS',T=>(Math.round(112800*eout(prog(T,45.0,46.8)))).toLocaleString('pt-BR')],[60.0,62.1,'GUARDADO POR',T=>'300 ANOS'],
  [62.3,63.8,'CÉSIO-137',T=>'19 g'],[63.9,66.5,'VIGIADO POR',T=>'3 SÉCULOS']];
 function hud(T){const h=document.getElementById('hud');let a=0,tag='',num='';for(const [a0,a1,tg,f] of HUDS){if(T>=a0&&T<a1){tag=tg;num=f(T);a=Math.min(prog(T,a0,a0+.3),1-prog(T,a1-.25,a1))}}
