@@ -28,9 +28,14 @@ function quadText(S,html,w,h,q,par){const it=div(S,'abs',`<div class="sign" styl
 function popTag(it,T,a,b){pop(it,T,a,b)}
 const SC=(t0,t1,b,u)=>scene(t0,t1,b,u);
 const L=n=>M3[n].layers,PT=n=>M3[n].pts;
-// 0 GANCHO — 19 gramas de pó azul
-SC(0,2.45,S=>{plate(S,L('hook').bg,.5);plate(S,L('hook').glow,.5);const p=PT('hook').po;S.g=glow(S,p[0],p[1],330,.5);S.g2=glow(S,p[0]-260,p[1]-90,170,.5)},
- (S,t,T)=>{pan(S,kf(t,[[0,30],[2.45,-30]]));const f=.75+.25*Math.sin(T*6)+.08*Math.sin(T*17);S.g.e.style.opacity=f;S.g2.e.style.opacity=f*.7;S.g.extra=` scale(${1+.04*Math.sin(T*5)})`});
+// 0 GANCHO — 19 gramas de pó azul (oficina desfocada, cápsula, pó brilhando, partículas)
+function closeUp(S,n){plate(S,L(n).back,.2);plate(S,L(n).near,.5);plate(S,L(n).glow,.5);S.bl=plate(S,L(n).glow,.5,{filter:'blur(22px)',mixBlendMode:'screen',opacity:.9});
+  const p=PT(n).po,q=PT(n).boca;S.g=glow(S,p[0],p[1],380,.5);S.g2=glow(S,q[0],q[1],200,.5);S.sp=[];
+  for(let i=0;i<26;i++){const e=document.createElement('div');e.className='glow';const r=6+((i*37)%9);e.style.width=e.style.height=r*2+'px';e.style.background='radial-gradient(circle,rgba(220,250,255,1) 0%,rgba(110,200,255,.7) 40%,rgba(60,150,255,0) 72%)';S.el.appendChild(e);
+    S.sp.push({e,x:p[0]-M+Math.sin(i*12.9)*230,y:p[1]+Math.cos(i*7.7)*40,v:40+(i*13)%50,ph:i*.37,par:.5})}}
+function closeUpd(S,t,T,cx,k){pan(S,cx);const f=.78+.22*Math.sin(T*5.5)+.06*Math.sin(T*17);S.g.e.style.opacity=f*k;S.g2.e.style.opacity=f*.8*k;S.bl.e.style.opacity=.85*k;
+  S.sp.forEach(s=>{const life=((t*.45+s.ph)%1);const y=s.y-life*s.v*6;s.e.style.left=(s.x+cx*s.par+Math.sin(T*1.7+s.ph*9)*18)+'px';s.e.style.top=y+'px';s.e.style.opacity=k*Math.sin(life*Math.PI)*(.6+.4*Math.sin(T*9+s.ph*20))})}
+SC(0,2.45,S=>closeUp(S,'hook'),(S,t,T)=>closeUpd(S,t,T,kf(t,[[0,45],[2.45,-35]]),1));
 // 1 6 MIL TONELADAS
 SC(2.45,6.4,S=>{plate(S,L('tonel').bg,.6)},(S,t,T)=>{pan(S,kf(t,[[0,-40],[3.95,40]]))});
 // 2 MAPA — Goiânia, 1987
@@ -84,8 +89,7 @@ SC(53.7,57.8,S=>{plate(S,L('lab').room,.5);plate(S,L('lab').mesa,.8);const p=PT(
 // 18 ABADIA DE GOIÁS — 300 ANOS
 SC(57.8,62.2,S=>{plate(S,L('aterro').bg,.5);const p=PT('aterro').morro;S.t=tagAt(S,'ABADIA DE GOIÁS',p[0],p[1]-60,.5)},(S,t,T)=>{pan(S,kf(t,[[0,40],[4.4,-40]]));popTag(S.t,T,58.4)});
 // 19 FINAL — 19 gramas, três séculos
-SC(62.2,DURATION0,S=>{plate(S,L('fim').bg,.5);plate(S,L('fim').glow,.5);const p=PT('fim').po;S.g=glow(S,p[0],p[1],380,.5)},
- (S,t,T)=>{pan(S,kf(t,[[0,-30],[4.5,30]]));S.g.e.style.opacity=(.75+.2*Math.sin(T*5))*(1-prog(T,65.6,66.6))});
+SC(62.2,DURATION0,S=>closeUp(S,'fim'),(S,t,T)=>closeUpd(S,t,T,kf(t,[[0,-40],[4.5,40]]),1-prog(T,65.6,66.6)));
 """
 HUD = r"""
 const HUDS=[[0.25,2.4,'PÓ AZUL',T=>Math.round(19*eout(prog(T,.3,1.3)))+' g'],[2.9,6.3,'LIXO RADIOATIVO',T=>(Math.round(6000*eout(prog(T,3.0,4.6)))).toLocaleString('pt-BR')+' t'],

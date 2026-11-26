@@ -81,7 +81,7 @@ vec2 scene(vec3 p){
     for(int i=0;i<2;i++){float x=i==0?-1.2:1.25;r=U(r,vec2(sdTorZ(q,vec3(x,.33,-.72),vec2(.2,.13)),63.));}
     r=U(r,vec2(sdSph(q,vec3(1.75,.75,-.45),.11),66.));} else r=U(r,vec2(bd,65.));}
   // árvores e postes
-  {float c=floor((p.x+3.)/14.);float x=c*14.;vec3 q=p-vec3(x,0,1.3);
+  {float c=floor((p.x+3.)/14.);float x=c*14.;if(abs(x-14.)<1.){x=19.;}vec3 q=p-vec3(x,0,1.3);
    r=U(r,vec2(sdCap(q,vec3(0),vec3(0,2.6,0),.15),51.));r=U(r,vec2(sdSph(q,vec3(0,3.4,0),1.2)+.3*vn(q.xy*2.5+q.z),50.));}
   {float c=floor((p.x+10.)/10.);float x=c*10.+5.;vec3 q=p-vec3(x,0,.35);
    r=U(r,vec2(sdCyl(q,vec3(0,3.5,0),3.5,.09),52.));r=U(r,vec2(sdRBox(q,vec3(0,6.6,0),vec3(.6,.05,.05),.0),52.));}

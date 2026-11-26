@@ -30,11 +30,11 @@ def render(pw, name, o, out):
 DAY = dict(Ldir=[-.55, .62, -.45], Lcol=[1.08, .92, .74], Acol=[.5, .6, .8])
 IN = dict(useGround=0, fogK=0., fogStart=50, tmaxU=40, Ldir=[-.5, .7, -.5], Lcol=[1.0, .9, .75], Acol=[.85, .78, .68])
 DUSK = dict(sunset=1, Ldir=[-.8, .25, -.3], Lcol=[1.0, .62, .5], Acol=[.45, .5, .8])
-STU = dict(useGround=0, fogK=0., tmaxU=30, Ldir=[-.6, .8, -.3], Acol=[.55, .6, .75])
+STU = dict(useGround=0, fogK=0., tmaxU=30, Ldir=[-.6, .8, -.3], Lcol=[.95, .82, .66], Acol=[.45, .5, .62])
 # nome: (arquivo, câmera, luz, camadas[(layer, nome, blur)], pontos 3D a projetar)
 CAMS = {
- 'hook':  ('estudio.html', ([0, 1.3, -3.2], [0, .15, 0], 1.4), STU, [(1, 'bg', 0), (6, 'glow', 0)], dict(po=[.55, .05, -.15], cap=[-.45, .32, .1])),
- 'fim':   ('estudio.html', ([-.6, .95, -2.5], [.25, .2, 0], 1.55), STU, [(1, 'bg', 0), (6, 'glow', 0)], dict(po=[.55, .05, -.15])),
+ 'hook':  ('estudio.html', ([0.75, .9, -3.0], [0.1, .3, 0], 1.45), STU, [(3, 'back', 14), (0, 'near', 0), (6, 'glow', 0)], dict(po=[.55, .12, -.25], boca=[-.1, .3, -.05])),
+ 'fim':   ('estudio.html', ([-.5, .8, -2.6], [.3, .25, 0], 1.5), STU, [(3, 'back', 14), (0, 'near', 0), (6, 'glow', 0)], dict(po=[.55, .12, -.25], boca=[-.1, .3, -.05])),
  'tonel': ('deposito.html', ([0.5, 1.5, -4.5], [0.6, 1.0, 10], 1.15), DAY, [(1, 'bg', 0), (2, 'fg', 10)], {}),
  'aterro':('deposito.html', ([1, 4.2, -8], [2, 1.5, 14], 1.05), DAY, [(1, 'bg', 0)], dict(morro=[2, 2.4, 15], placa=[-3.2, 2.62, 3.94])),
  'clin':  ('rua.html', ([-4, 1.7, -11], [-4, 2.6, 10], 1.05), DAY, [(1, 'bg', 0), (2, 'fg', 14)], dict(maq=[-6.4, 2.9, 4.4])),
