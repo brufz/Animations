@@ -107,7 +107,7 @@ export async function load(spec){
   if(spec.only)obj.traverse(o=>{if(o.isMesh&&!o.name.startsWith(spec.only))o.visible=false});
   obj.traverse(o=>{if((o.isMesh||o.isSkinnedMesh)&&o.visible){o.castShadow=true;o.frustumCulled=false;
     if(o.material&&!Array.isArray(o.material)){o.material=o.material.clone();const c=spec.colors&&spec.colors[o.name];if(c!==undefined){if(c===null)o.visible=false;else{o.material.color=new THREE.Color(c);}}
-      if(spec.tint&&spec.tint[o.name])o.material.color.multiply(new THREE.Color(spec.tint[o.name]));}}});
+      if(spec.tint&&spec.tint[o.name]){o.material.color.multiply(new THREE.Color(spec.tint[o.name]));if(spec.tintK)o.material.color.multiplyScalar(spec.tintK);}}}});
   const box=new THREE.Box3();obj.updateMatrixWorld(true);obj.traverse(o=>{if(o.isMesh&&o.visible)box.expandByObject(o)});const h=box.max.y-box.min.y;const s=(spec.height||1.72)/h;obj.scale.multiplyScalar(s);
   obj.updateMatrixWorld(true);const b2=new THREE.Box3();obj.traverse(o=>{if(o.isMesh&&o.visible)b2.expandByObject(o)});obj.userData.y0=-b2.min.y;
   const mx=new THREE.AnimationMixer(obj);const actions={};

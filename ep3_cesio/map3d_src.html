@@ -1,0 +1,121 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:transparent}canvas{display:block}</style></head><body><canvas id="c" width="300" height="500"></canvas><script>
+// Mapa-maquete 3D (relevo + mar com profundidade) a partir de contornos reais
+const TEX="data:image/png;base64,__B64__";
+const VS=`#version 300 es
+in vec2 p;void main(){gl_Position=vec4(p,0,1);}`;
+const FS=`#version 300 es
+precision highp float;
+uniform vec2 R;uniform vec3 camP,camT;uniform float span,T;uniform sampler2D tx;
+uniform vec3 pin0,pin1,pin2;uniform float cyl,objOnly;uniform float pinH0,pinH1,pinH2;uniform vec3 boatP;uniform float boatA,boatOn;
+out vec4 o;
+const vec2 HALF=vec2(1.6,1.6);
+const float HS=.07;
+vec3 S(vec2 xz){vec2 uv=vec2((xz.x+HALF.x)/(2.*HALF.x),1.-(xz.y+HALF.y)/(2.*HALF.y));return texture(tx,uv).rgb;}
+float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+float vn(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(hash(i),hash(i+vec2(1,0)),f.x),mix(hash(i+vec2(0,1)),hash(i+vec2(1,1)),f.x),f.y);}
+float ht(vec2 xz){vec3 s=S(xz);float land=smoothstep(.3,.7,s.b);return land*(.004+s.r*HS+(vn(xz*38.)-.5)*.008*s.r);}
+float sdCap(vec3 p,vec3 a,vec3 b,float r){vec3 pa=p-a,ba=b-a;float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.);return length(pa-ba*h)-r;}
+float sdSph(vec3 p,vec3 c,float r){return length(p-c)-r;}
+float sdRBox(vec3 p,vec3 c,vec3 b,float r){vec3 q=abs(p-c)-b;return length(max(q,0.))+min(max(q.x,max(q.y,q.z)),0.)-r;}
+float sdEll(vec3 p,vec3 c,vec3 r){p-=c;float k0=length(p/r),k1=length(p/(r*r));return k0*(k0-1.)/k1;}
+mat2 rot(float a){float c=cos(a),s=sin(a);return mat2(c,-s,s,c);}
+vec2 U(vec2 a,vec2 b){return a.x<b.x?a:b;}
+vec2 pin(vec3 p,vec3 c,float hh,float m){if(hh<.01)return vec2(1e3,0.);vec3 b=vec3(c.x,c.y,c.z);
+  vec2 r=vec2(sdCap(p,b,b+vec3(0,.16*hh,0),.006*hh),5.);r=U(r,vec2(sdSph(p,b+vec3(0,.17*hh,0),.034*hh),m));return r;}
+vec2 objs(vec3 p){vec2 r=vec2(1e3,0.);
+  r=U(r,pin(p,pin0,pinH0,6.));r=U(r,pin(p,pin1,pinH1,6.));r=U(r,pin(p,pin2,pinH2,6.));
+  if(boatOn>.5){vec3 q=p-boatP;q.xz*=rot(boatA);
+    float hull=sdEll(q,vec3(0,.002,0),vec3(.06,.026,.024));hull=max(hull,q.y-.01);
+    r=U(r,vec2(hull,7.));r=U(r,vec2(sdRBox(q,vec3(-.012,.018,0),vec3(.02,.008,.013),.003),8.));
+    r=U(r,vec2(sdCap(q,vec3(.01,.01,0),vec3(.01,.09,0),.0028),9.));
+    vec3 s=q-vec3(.026,.05,0);float sail=max(sdRBox(s,vec3(0),vec3(.016,.036,.0015),.0),dot(s.xy,normalize(vec2(1.,.45)))-.004);
+    r=U(r,vec2(sail,8.));}
+  return r;}
+float shadowObj(vec3 ro,vec3 rd){float res=1.,t=.004;for(int i=0;i<40;i++){float h=objs(ro+rd*t).x;res=min(res,8.*h/t);t+=clamp(h,.003,.05);if(res<.01||t>1.)break;}return clamp(res,0.,1.);}
+float shadowH(vec3 p,vec3 L){float res=1.;float t=.01;for(int i=0;i<36;i++){vec3 q=p+L*t;if(abs(q.x)>HALF.x||abs(q.z)>HALF.y)break;float d=q.y-ht(q.xz);res=min(res,24.*d/t);t+=.012;if(q.y>.1)break;}return clamp(res,0.,1.);}
+bool boxHit(vec3 ro,vec3 rd,vec3 bmin,vec3 bmax,out float t0,out float t1,out vec3 nn){
+  vec3 inv=1./rd;vec3 a=(bmin-ro)*inv,b=(bmax-ro)*inv;vec3 mn=min(a,b),mx=max(a,b);t0=max(max(mn.x,mn.y),mn.z);t1=min(min(mx.x,mx.y),mx.z);
+  nn=t0==mn.x?vec3(-sign(rd.x),0,0):(t0==mn.y?vec3(0,-sign(rd.y),0):vec3(0,0,-sign(rd.z)));return t1>max(t0,0.);}
+vec3 landCol(vec2 xz,float h,vec3 n){vec3 s=S(xz);
+  vec3 sand=vec3(.93,.84,.64),dry=vec3(.72,.66,.42),green=vec3(.42,.58,.3),dark=vec3(.32,.46,.24);
+  float k=clamp(s.r*2.2,0.,1.);float nz=vn(xz*60.);
+  vec3 c=mix(sand,mix(dry,green,smoothstep(.3,.8,nz+xz.y*-.4+.2)),smoothstep(.02,.25,k));
+  c=mix(c,dark,smoothstep(.6,1.,k)*.5);
+  return c;}
+void main(){
+  vec2 uv=(gl_FragCoord.xy-.5*R)/R.y;
+  vec3 ro=camP,ta=camT;vec3 ww=normalize(ta-ro),uu=normalize(cross(vec3(0,1,0),ww)),vv=cross(ww,uu);
+  vec3 rd=normalize(uv.x*uu+uv.y*vv+span*ww);
+  if(cyl>1.5){float kk=length(ta-camP)/span;ro=camP+uu*uv.x*kk;rd=normalize(uv.y*vv+span*ww);}
+  else if(cyl>.5){vec3 r0=normalize(uv.y*vv+span*ww);float an=uv.x/span;rd=vec3(r0.x*cos(an)+r0.z*sin(an),r0.y,-r0.x*sin(an)+r0.z*cos(an));}
+  vec3 L=normalize(vec3(-.5,.75,-.35));
+  // mesa
+  vec3 col;float tt=1e9;int kind=0;vec3 n=vec3(0,1,0);vec3 p;
+  float tTable=rd.y<0.?(-.16-ro.y)/rd.y:1e9;
+  float t0,t1;vec3 bn;
+  bool hb=objOnly<.5&&boxHit(ro,rd,vec3(-HALF.x,-.16,-HALF.y),vec3(HALF.x,HS+.02,HALF.y),t0,t1,bn);
+  if(hb){
+    // face lateral da maquete?
+    vec3 pe=ro+rd*max(t0,0.);
+    if(bn.y==0.&&pe.y<ht(pe.xz)){tt=t0;kind=3;n=bn;}
+    else{
+      float t=max(t0,0.);float dt=(t1-t)/300.;float prev=0.;bool hit=false;
+      for(int i=0;i<300;i++){vec3 q=ro+rd*t;float d=q.y-ht(q.xz);if(d<0.){float a=t-dt,b=t;for(int k=0;k<8;k++){float m=(a+b)*.5;vec3 qm=ro+rd*m;if(qm.y-ht(qm.xz)<0.)b=m;else a=m;}t=b;hit=true;break;}t+=dt;}
+      if(hit){tt=t;kind=1;}
+    }
+  }
+  // objetos
+  float to=0.;vec2 ho;bool oh=false;
+  for(int i=0;i<120;i++){ho=objs(ro+rd*to);if(ho.x<.0003){oh=true;break;}to+=ho.x;if(to>12.)break;}
+  if(oh&&to<tt){tt=to;kind=2;}
+  if(tt>1e8&&objOnly>.5){o=vec4(0);return;}
+  if(tt>1e8){if(tTable<1e8){tt=tTable;kind=4;}else{o=vec4(.9,.85,.78,1);return;}}
+  p=ro+rd*tt;
+  if(kind==1){vec2 e=vec2(.0025,0);float h=ht(p.xz);n=normalize(vec3(ht(p.xz-e.xy)-ht(p.xz+e.xy),2.*e.x,ht(p.xz-e.yx)-ht(p.xz+e.yx)));
+    vec3 s=S(p.xz);bool land=s.b>.5&&h>.0035;
+    if(land){col=landCol(p.xz,h,n);}
+    else{ // mar: raso turquesa -> fundo azul
+      float d=s.g;vec3 sh=vec3(.45,.86,.86),mid=vec3(.12,.58,.78),deep=vec3(.05,.27,.55);
+      col=mix(sh,mid,smoothstep(.0,.12,d));col=mix(col,deep,smoothstep(.1,.7,d));
+      float foam=smoothstep(.02,.0,d)*(.6+.4*sin(T*2.+p.x*80.));col=mix(col,vec3(.97),foam*.7);
+      vec2 w=vec2(vn(p.xz*90.+T*.6),vn(p.xz*90.-T*.5+3.))-.5;n=normalize(vec3(w.x*.25,1.,w.y*.25));
+      kind=5;}
+  }else if(kind==2){p=ro+rd*tt;vec2 e=vec2(.0005,0);n=normalize(vec3(objs(p+e.xyy).x-objs(p-e.xyy).x,objs(p+e.yxy).x-objs(p-e.yxy).x,objs(p+e.yyx).x-objs(p-e.yyx).x));
+    float m=ho.y;col=m<5.5?vec3(.85,.85,.88):(m<6.5?vec3(.9,.18,.15):(m<7.5?vec3(.75,.32,.2):(m<8.5?vec3(.98,.96,.9):vec3(.45,.3,.2))));
+  }else if(kind==3){ // lateral: estratos
+    float y=p.y;col=y>-.005?vec3(.2,.55,.75):mix(vec3(.12,.32,.55),vec3(.07,.18,.38),clamp(-y/.15,0.,1.));
+    float land=S(clamp(p.xz,-HALF+.001,HALF-.001)).b;if(land>.5)col=mix(vec3(.62,.48,.32),vec3(.45,.33,.22),clamp(-y/.15,0.,1.));
+    col*=.95+.05*sin(y*400.);
+  }else{ // mesa de madeira
+    float g=vn(vec2(p.x*3.,p.z*40.))*.5+vn(vec2(p.x*12.,p.z*120.))*.3;col=mix(vec3(.55,.36,.22),vec3(.68,.47,.3),g);n=vec3(0,1,0);}
+  float dif=clamp(dot(n,L),0.,1.);
+  float sh=1.;if(kind!=3){sh=shadowObj(p+n*.002,L);if(kind==1||kind==4||kind==5)sh*=kind==4?1.:shadowH(p+vec3(0,.001,0),L);}
+  if(kind==4){ // sombra da maquete na mesa
+    vec3 q=p;float tb0,tb1;vec3 bb;if(boxHit(q,L,vec3(-HALF.x,-.16,-HALF.y),vec3(HALF.x,0.,HALF.y),tb0,tb1,bb))sh*=.35;
+    float ed=max(abs(p.x)-HALF.x,abs(p.z)-HALF.y);sh*=mix(.55,1.,smoothstep(0.,.12,ed));}
+  float sky=.6+.4*n.y;
+  vec3 lin=vec3(1.05,.95,.82)*dif*sh*1.15+vec3(.55,.65,.85)*sky*.5;
+  vec3 res=col*lin;
+  if(kind==5){vec3 rf=reflect(rd,n);res+=vec3(1.,.95,.85)*pow(clamp(dot(rf,L),0.,1.),60.)*.8*sh;res+=vec3(.6,.75,.9)*pow(1.-clamp(dot(n,-rd),0.,1.),5.)*.25;}
+  if(kind==2)res+=vec3(1.)*pow(clamp(dot(reflect(rd,n),L),0.,1.),40.)*.6;
+  res=1.-exp(-res*1.35);float lu=dot(res,vec3(.3,.59,.11));res=mix(vec3(lu),res,1.12);
+  o=vec4(pow(res,vec3(.95)),1);
+}`;
+const c=document.getElementById('c');const gl=c.getContext('webgl2',{premultipliedAlpha:false,preserveDrawingBuffer:true,alpha:true});
+function sh(t,s){const x=gl.createShader(t);gl.shaderSource(x,s);gl.compileShader(x);if(!gl.getShaderParameter(x,gl.COMPILE_STATUS))throw gl.getShaderInfoLog(x);return x}
+const pr=gl.createProgram();gl.attachShader(pr,sh(gl.VERTEX_SHADER,VS));gl.attachShader(pr,sh(gl.FRAGMENT_SHADER,FS));gl.linkProgram(pr);gl.useProgram(pr);
+const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,3,-1,-1,3]),gl.STATIC_DRAW);
+const l=gl.getAttribLocation(pr,'p');gl.enableVertexAttribArray(l);gl.vertexAttribPointer(l,2,gl.FLOAT,false,0,0);
+const U=n=>gl.getUniformLocation(pr,n);
+window.ready=new Promise(res=>{const im=new Image();im.onload=()=>{const t=gl.createTexture();gl.bindTexture(gl.TEXTURE_2D,t);
+  gl.texImage2D(gl.TEXTURE_2D,0,gl.RGB,gl.RGB,gl.UNSIGNED_BYTE,im);gl.generateMipmap(gl.TEXTURE_2D);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MIN_FILTER,gl.LINEAR_MIPMAP_LINEAR);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_MAG_FILTER,gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_S,gl.CLAMP_TO_EDGE);gl.texParameteri(gl.TEXTURE_2D,gl.TEXTURE_WRAP_T,gl.CLAMP_TO_EDGE);res(1)};im.src=TEX;});
+// geo -> mundo
+window.geo=(lat,lon)=>[(lon-(-69.4))/1.0,0,(lat-12.0)/1.0];
+window.draw=(o)=>{c.width=o.w;c.height=o.h;gl.viewport(0,0,o.w,o.h);gl.uniform2f(U('R'),o.w,o.h);
+ gl.uniform3fv(U('camP'),o.camP);gl.uniform3fv(U('camT'),o.camT);gl.uniform1f(U('span'),o.span||1.6);gl.uniform1f(U('cyl'),o.cyl||0);gl.uniform1f(U('objOnly'),o.objOnly||0);gl.uniform1f(U('T'),o.T||0);
+ for(let i=0;i<3;i++){gl.uniform3fv(U('pin'+i),o['pin'+i]||[0,-9,0]);gl.uniform1f(U('pinH'+i),o['pinH'+i]||0);}
+ gl.uniform3fv(U('boatP'),o.boatP||[0,0,0]);gl.uniform1f(U('boatA'),o.boatA||0);gl.uniform1f(U('boatOn'),o.boatOn||0);
+ gl.clearColor(0,0,0,0);gl.clear(gl.COLOR_BUFFER_BIT);gl.drawArrays(gl.TRIANGLES,0,3);gl.finish();return 1};
+</script></body></html>

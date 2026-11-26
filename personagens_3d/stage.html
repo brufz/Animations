@@ -13,7 +13,7 @@ window.setup=async(o)=>{
   const rim=new THREE.DirectionalLight(lt.rimC??0xffe2c0,lt.rimI??1.1);rim.position.set(2,3,8);sc.add(rim);
   const g=new THREE.Mesh(new THREE.PlaneGeometry(60,60),new THREE.ShadowMaterial({opacity:.33}));g.rotation.x=-Math.PI/2;g.receiveShadow=true;sc.add(g);
   window._o=o;
-  for(const a of o.actors){const X=await load(a.spec);X.obj.position.set(a.keys[0][1],X.obj.userData.y0,a.keys[0][2]);X.obj.rotation.y=a.rotY||0;sc.add(X.obj);X.a=a;A.push(X);}
+  for(const a of o.actors){const X=await load(a.spec);X.items=((a.fx||{}).items||[]).map(it=>{const g=it.type==='sphere'?new THREE.SphereGeometry(.5,24,16):it.type==='cyl'?new THREE.CylinderGeometry(.5,.5,1,24):new THREE.BoxGeometry(1,1,1);const m=new THREE.MeshStandardMaterial({color:new THREE.Color(it.color||'#888'),roughness:it.rough??.5,metalness:it.metal??.2,emissive:new THREE.Color(it.emis||'#000'),emissiveIntensity:it.emisI??1});const me=new THREE.Mesh(g,m);me.scale.set(...it.size);me.castShadow=true;sc.add(me);return {it,me}});X.obj.position.set(a.keys[0][1],X.obj.userData.y0,a.keys[0][2]);X.obj.rotation.y=a.rotY||0;sc.add(X.obj);X.a=a;A.push(X);}
   return 1};
 // a.keys: [[t, x, z, rotY, anim, animT0]] — interpola posição/rotação; troca de animação com mistura de 0.3s
 window.frame=(t)=>{
@@ -22,7 +22,7 @@ window.frame=(t)=>{
     const lerp=(a,b)=>a+(b-a)*u;X.obj.position.x=lerp(k[1],n[1]);X.obj.position.z=lerp(k[2],n[2]);
     const ru=Math.min(1,(t-k[0])/0.35);X.obj.rotation.y=(i>0?K[i-1][3]:k[3])+(k[3]-(i>0?K[i-1][3]:k[3]))*Math.max(0,ru);
     const pk=i>0?K[i-1]:null;const w=pk&&pk[4]!==k[4]?Math.max(0,1-(t-k[0])/0.3):0;
-    if(w>0)pose(X,k[4],(t-k[0])+(k[5]||0),pk[4],(t-pk[0])+(pk[5]||0),w);else pose(X,k[4],(t-k[0])+(k[5]||0));X.obj.position.y=X.obj.userData.y0;fx(X,t);}
+    if(w>0)pose(X,k[4],(t-k[0])+(k[5]||0),pk[4],(t-pk[0])+(pk[5]||0),w);else pose(X,k[4],(t-k[0])+(k[5]||0));X.obj.position.y=X.obj.userData.y0+((X.a.fx||{}).lift||0);fx(X,t);}
   const L=_o.Ldir;sun.target.position.set(0,0,-1);sun.position.set(L[0]*10,L[1]*10,L[2]*10-1);
   r.render(sc,cam);return 1};
 
@@ -57,6 +57,13 @@ function fx(X,t){X0=X;const F=X.a.fx||{};const ry=X.obj.rotation.y;const loc=(x,
   if(tk>0&&!W){for(const s2 of ['Right','Left']){const sg=s2==='Right'?-1:1;const AR=bone(X,s2+'Arm'),FA=bone(X,s2+'ForeArm'),HH=bone(X,s2+'Hand');if(!FA)continue;
       const ph=Math.sin(t*3.1+(s2==='Left'?1.9:0)+sd),ph2=Math.sin(t*1.7+sd*2);const amp=s2==='Right'?1:.6;
       aim(AR,FA,loc(sg*(.32+.1*ph2),-1,.3),tk*.5*amp);aim(FA,HH,loc(sg*(.45+.25*ph2),.1+.5*Math.max(0,ph)*amp,.7),tk*.85*amp);palm(X,s2,HH,loc,tk*.8*amp,loc(-sg*.4,1,0),.5);}}
+  const CW=inWin(t,F.carry);if(CW){const [w,k]=CW;const sides=w[2]==='both'?['Right','Left']:[w[2]||'Right'];const hy=w[3]??0;
+    for(const s3 of sides){const sg=s3==='Right'?-1:1;const AR=bone(X,s3+'Arm'),FA=bone(X,s3+'ForeArm'),HH=bone(X,s3+'Hand');if(!AR)continue;
+      aim(AR,FA,loc(sg*(w[2]==='both'?.12:.2),-1,.55),k);aim(FA,HH,loc(sg*(w[2]==='both'?-.35:-.05),.15+hy,1),k);palm(X,s3,HH,loc,k*.6,loc(-sg,0,0),.3);}}
+  if(X.items&&X.items.length){X.obj.updateMatrixWorld(true);for(const {it,me} of X.items){const on=!it.win||(t>=it.win[0]&&t<=it.win[1]);me.visible=on;if(!on)continue;
+      let pos;if(it.side==='both'){const a=bone(X,'RightHand').getWorldPosition(new THREE.Vector3()),b=bone(X,'LeftHand').getWorldPosition(new THREE.Vector3());pos=a.add(b).multiplyScalar(.5);}
+      else pos=bone(X,(it.side||'Right')+'Hand').getWorldPosition(new THREE.Vector3());
+      const o2=it.off||[0,0,0];pos.add(loc(o2[0],o2[1],o2[2]));me.position.copy(pos);me.rotation.set(...(it.rot||[0,0,0]));me.rotation.y+=X.obj.rotation.y;}}
   // rosto (morph targets de quem tiver)
   let mo=0;const T=inWin(t,F.talk);if(T){const n=Math.sin(t*23)*.5+Math.sin(t*14.3)*.5;mo=T[1]*Math.max(0,n)*.75;}
   X.obj.traverse(o=>{if(o.morphTargetDictionary){const d=o.morphTargetDictionary;if(d.mouthOpen!==undefined)o.morphTargetInfluences[d.mouthOpen]=mo;if(d.mouthSmile!==undefined)o.morphTargetInfluences[d.mouthSmile]=F.smile||0;}});}

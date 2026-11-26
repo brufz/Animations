@@ -1,0 +1,114 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:transparent}canvas{display:block}</style></head><body><canvas id="c" width="300" height="500"></canvas>
+<script src="lib3d.js"></script><script>
+// Rua de Goiânia, 1987: casas baixas com muro, clínica abandonada (meio demolida) e a Vigilância Sanitária.
+// layer 1 = tudo do cenário; layer 2 = primeiro plano (desfocado); layer 5 = só o ônibus (sprite que desliza)
+const SCENE_GLSL=`
+float house(vec3 p,float x0,float w,float h,out float m){ // casa com muro
+  vec3 q=p-vec3(x0+w*.5,0,0);float d=sdRBox(q,vec3(0,h*.5,5.2),vec3(w*.5-.15,h*.5,2.5),.02);m=10.;
+  float roof=sdRBox(q,vec3(0,h+.12,5.),vec3(w*.5,.12,2.8),.02);if(roof<d){d=roof;m=20.;}
+  float muro=sdRBox(q,vec3(0,.85,2.),vec3(w*.5-.02,.85,.09),.01);
+  float gate=sdRBox(q,vec3(w*.18,.8,2.),vec3(w*.17,.78,.12),.0);
+  muro=max(muro,-gate);if(muro<d){d=muro;m=11.;}
+  float gt=sdRBox(q,vec3(w*.18,.8,2.03),vec3(w*.17,.78,.03),.0);if(gt<d){d=gt;m=22.;}
+  float win=sdRBox(q,vec3(-w*.2,1.7,2.7),vec3(.55,.45,.04),.0);if(win<d){d=win;m=21.;}
+  return d;}
+vec2 bus(vec3 p){vec3 q=p-vec3(0,0,-1.6);
+  float outer=sdRBox(q,vec3(0,1.55,0),vec3(4.,1.15,1.25),.18);
+  float inner=sdRBox(q,vec3(0,1.6,0),vec3(3.85,1.0,1.1),.0);
+  float body=max(outer,-inner);
+  float win=1e3;for(int i=0;i<5;i++){win=min(win,sdRBox(q,vec3(-3.15+float(i)*1.35,1.95,0.),vec3(.56,.4,1.6),.06));}
+  body=max(body,-win);
+  vec2 r=vec2(body,60.);
+  r=U(r,vec2(sdRBox(q,vec3(3.75,1.3,-1.3),vec3(.3,.95,.06),.02),61.)); // porta
+  r=U(r,vec2(sdRBox(q,vec3(0,.95,-1.42),vec3(4.05,.09,.03),.0),62.)); // faixa
+  for(int i=0;i<2;i++){float x=i==0?-2.6:2.5;r=U(r,vec2(sdTorZ(q,vec3(x,.5,-1.25),vec2(.3,.18)),63.));r=U(r,vec2(sdCyl(q.xzy,vec3(x,-1.42,.5),.03,.22),64.));}
+  return r;}
+vec2 scene(vec3 p){
+  vec2 r=vec2(1e3,0.);
+  if(layer>4.5)return bus(p);
+  if(layer>1.5){ // primeiro plano: poste e galhos desfocados
+    r=U(r,vec2(sdCyl(p,vec3(-1.2,3.,-4.6),3.,.12),52.));
+    r=U(r,vec2(sdSph(p,vec3(3.8,3.9,-5.),1.1)+.25*vn(p.xy*3.),50.));
+    return r;}
+  if(!INSH){r=U(r,vec2(p.y,1.));}
+  r=U(r,vec2(sdRBox(p,vec3(0,.06,1.),vec3(80.,.06,1.),.0),2.)); // calçada
+  r=U(r,vec2(sdRBox(p,vec3(0,.07,0.02),vec3(80.,.07,.06),.01),3.)); // meio-fio
+  // casas ao longo da rua
+  {float cell=floor((p.x+40.)/6.);float x0=cell*6.-40.;float h=2.7+.6*hash(vec2(cell,1.));
+   bool skip=(x0>-12.5&&x0<1.)||(x0>5.&&x0<18.);
+   if(!skip&&abs(p.x)<60.){float m;float d=house(p,x0,6.,h,m);r=U(r,vec2(d,m+hash(vec2(cell,3.))*.4));}}
+  // CLÍNICA ABANDONADA (x -10..0)
+  {vec3 q=p-vec3(-5.,0,0);float bd=sdRBox(q,vec3(0,3.,5.),vec3(5.,3.,3.2),.0);
+   if(bd<1.){
+    float b=sdRBox(q,vec3(0,3.,5.),vec3(4.8,3.,3.),.02);
+    float inner=sdRBox(q,vec3(0,3.,5.),vec3(4.5,2.85,2.75),.0);b=max(b,-inner);
+    // parte demolida: rombo grande no canto direito e no telhado
+    float hole=sdRBox(q-vec3(2.6,4.2,1.6),vec3(0),vec3(2.6,2.4,2.),.0)+.35*(vn(q.xy*1.7)-.5);
+    b=max(b,-hole);
+    for(int i=0;i<4;i++){float wx=-3.6+float(i)*1.9;b=max(b,-sdRBox(q,vec3(wx,1.6,2.),vec3(.55,.7,.4),.0));b=max(b,-sdRBox(q,vec3(wx,4.3,2.),vec3(.55,.6,.4),.0));}
+    b=max(b,-sdRBox(q,vec3(-1.1,1.2,2.),vec3(.7,1.2,.4),.0)); // porta
+    r=U(r,vec2(b,30.));
+    r=U(r,vec2(max(sdRBox(q,vec3(0,3.05,5.),vec3(4.6,.1,2.9),.0),-hole),30.)); // laje
+    // entulho
+    float e=1e3;for(int i=0;i<9;i++){float fi=float(i);vec3 c=vec3(-1.5+fi*.62,.0,1.4+.5*hash(vec2(fi,2.)));e=min(e,sdRBox(q,c,vec3(.25+.2*hash(vec2(fi,1.)),.18+.25*hash(vec2(fi,5.)),.3),.06));}
+    e=smin(e,sdSph(q,vec3(1.6,-.2,2.6),.9),.3);r=U(r,vec2(e,31.));
+    for(int i=0;i<4;i++){float fi=float(i);r=U(r,vec2(sdCap(q,vec3(.6+fi*.4,3.05,2.2),vec3(.8+fi*.45,3.6+.3*hash(vec2(fi,7.)),2.4),.02),32.));}
+    // o aparelho de radioterapia lá dentro
+    vec3 a=q-vec3(-1.4,0,4.6);
+    r=U(r,vec2(sdRBox(a,vec3(0,.45,0),vec3(.55,.45,.5),.04),33.));
+    r=U(r,vec2(sdRBox(a,vec3(0,1.5,.3),vec3(.22,.8,.22),.03),33.));
+    r=U(r,vec2(sdCyl(a.yxz,vec3(2.2,.0,-.2),.4,.5),34.));
+    r=U(r,vec2(sdCyl(a.yxz,vec3(2.2,.0,-.2),.45,.28),35.));
+    // mato
+    r=U(r,vec2(sdRBox(q,vec3(.5,.05,1.5),vec3(4.5,.06,.4),.05)+.08*vn(q.xz*6.),53.));
+   } else r=U(r,vec2(bd,30.));}
+  // VIGILÂNCIA SANITÁRIA (x 9..17)
+  {vec3 q=p-vec3(13.,0,0);float bd=sdRBox(q,vec3(0,2.,5.),vec3(4.6,2.3,3.2),.0);
+   if(bd<1.){
+    float b=sdRBox(q,vec3(0,1.75,5.),vec3(4.4,1.75,3.),.02);r=U(r,vec2(b,40.));
+    r=U(r,vec2(sdRBox(q,vec3(0,.55,1.99),vec3(4.4,.1,.03),.0),41.));
+    r=U(r,vec2(sdRBox(q,vec3(0,3.62,5.),vec3(4.7,.14,3.3),.02),41.));
+    r=U(r,vec2(sdRBox(q,vec3(0,2.95,1.85),vec3(2.4,.42,.06),.03),42.)); // placa
+    r=U(r,vec2(sdRBox(q,vec3(0,1.1,1.98),vec3(.75,1.1,.04),.0),21.)); // porta de vidro
+    r=U(r,vec2(sdRBox(q,vec3(-2.7,1.6,1.98),vec3(.8,.55,.04),.0),21.));r=U(r,vec2(sdRBox(q,vec3(2.7,1.6,1.98),vec3(.8,.55,.04),.0),21.));
+   } else r=U(r,vec2(bd,40.));}
+  // Fusca estacionado
+  {vec3 q=p-vec3(4.2,0,-.95);float bd=length(q-vec3(0,.7,0))-2.6;if(bd<.5){
+    float body=sdEll(q,vec3(0,.72,0),vec3(1.95,.55,.82));body=max(body,.22-q.y);
+    float cab=sdEll(q,vec3(-.15,1.15,0),vec3(1.05,.55,.72));body=smin(body,cab,.15);
+    r=U(r,vec2(body,65.));
+    r=U(r,vec2(max(sdEll(q,vec3(-.15,1.18,0),vec3(1.0,.5,.73)),-q.y+1.12),61.));
+    for(int i=0;i<2;i++){float x=i==0?-1.2:1.25;r=U(r,vec2(sdTorZ(q,vec3(x,.33,-.72),vec2(.2,.13)),63.));}
+    r=U(r,vec2(sdSph(q,vec3(1.75,.75,-.45),.11),66.));} else r=U(r,vec2(bd,65.));}
+  // árvores e postes
+  {float c=floor((p.x+3.)/14.);float x=c*14.;vec3 q=p-vec3(x,0,1.3);
+   r=U(r,vec2(sdCap(q,vec3(0),vec3(0,2.6,0),.15),51.));r=U(r,vec2(sdSph(q,vec3(0,3.4,0),1.2)+.3*vn(q.xy*2.5+q.z),50.));}
+  {float c=floor((p.x+10.)/10.);float x=c*10.+5.;vec3 q=p-vec3(x,0,.35);
+   r=U(r,vec2(sdCyl(q,vec3(0,3.5,0),3.5,.09),52.));r=U(r,vec2(sdRBox(q,vec3(0,6.6,0),vec3(.6,.05,.05),.0),52.));}
+  return r;}
+bool groundOK(vec3 p){return layer>.5&&layer<1.5;}
+float groundMat(vec3 p){return 1.;}
+vec3 SKY(vec3 rd){vec3 top=vec3(.38,.6,.88),hor=vec3(.95,.88,.74);float y=clamp(rd.y*2.2,0.,1.);vec3 c=mix(hor,top,pow(y,.7));
+  if(rd.y>0.){vec2 q=rd.xz/(rd.y+.15)*1.2;float cl=smoothstep(.55,.85,vn(q*1.3)*.6+vn(q*3.1)*.4);c=mix(c,vec3(1.,.98,.95),cl*.55*smoothstep(0.,.25,rd.y));}return c;}
+vec3 mcol(float m,vec3 p,vec3 n,inout float ks,inout float em){
+  if(m<1.5){float cr=smoothstep(.0,.04,abs(fract(p.x*.15)-.5)-.44)*step(abs(p.z+3.),.06);return mix(vec3(.36,.35,.34),vec3(.9,.85,.6),cr)*(.9+.15*vn(p.xz*3.));}
+  if(m<2.5){float t=step(.04,fract(p.x))*step(.04,fract(p.z));return mix(vec3(.6,.57,.52),vec3(.78,.74,.66),t)*(.9+.1*vn(p.xz*5.));}
+  if(m<3.5)return vec3(.75,.72,.66);
+  if(m<10.95){float h=fract(m)*2.5;vec3 cs[5]=vec3[5](vec3(.96,.86,.62),vec3(.78,.9,.84),vec3(.96,.78,.72),vec3(.86,.86,.95),vec3(.98,.94,.84));return cs[int(h*1.99)%5]*(.92+.08*vn(p.xy*3.));}
+  if(m<11.95){float h=fract(m)*2.5;vec3 cs[4]=vec3[4](vec3(.95,.95,.9),vec3(.86,.7,.5),vec3(.65,.78,.86),vec3(.9,.82,.6));vec3 c=cs[int(h*1.6)%4];return c*(.85+.15*vn(p.xy*vec2(2.,8.)))*(p.y<.25?.7:1.);}
+  if(m<20.95){return vec3(.66,.32,.2)*(.85+.15*step(.5,fract(p.x*4.)));}
+  if(m<21.5){ks=.8;return vec3(.18,.22,.26)+vec3(.1,.13,.16)*step(.5,fract(p.y*2.+p.x*.3));}
+  if(m<22.5){ks=.4;return vec3(.32,.36,.4)*(.8+.2*step(.5,fract(p.x*8.)));}
+  if(m<30.5){float st=vn(p.xy*vec2(1.5,.6));return mix(vec3(.78,.76,.7),vec3(.52,.5,.44),smoothstep(.4,.9,st)+.35*smoothstep(1.5,0.,p.y))*(.9+.1*vn(p.xy*9.));}
+  if(m<31.5)return mix(vec3(.62,.6,.55),vec3(.55,.42,.35),vn(p.xz*4.))*(.85+.2*vn(p.xy*12.));
+  if(m<32.5)return vec3(.4,.25,.15);
+  if(m<33.5){ks=.4;return vec3(.62,.68,.72);}if(m<34.5){ks=.6;return vec3(.42,.5,.56);}if(m<35.5){ks=.3;return vec3(.25,.27,.3);}
+  if(m<40.5)return vec3(.96,.96,.93)*(.94+.06*vn(p.xy*3.));if(m<41.5)return vec3(.16,.42,.7);if(m<42.5)return vec3(.98,.98,.96);
+  if(m<50.5)return mix(vec3(.25,.45,.2),vec3(.4,.6,.25),vn(p.xy*4.+p.z));if(m<51.5)return vec3(.4,.3,.2);if(m<52.5){ks=.3;return vec3(.6,.6,.58);}
+  if(m<53.5)return mix(vec3(.35,.5,.2),vec3(.55,.6,.3),vn(p.xz*8.));
+  if(m<60.5){ks=.5;return p.y>1.?vec3(.95,.95,.92):vec3(.86,.25,.18);}if(m<61.5){ks=.9;return vec3(.15,.2,.25);}if(m<62.5)return vec3(.95,.75,.2);if(m<63.5)return vec3(.08);if(m<67.5&&m>66.5)return vec3(.3,.32,.36);if(m<64.5){ks=.6;return vec3(.7);}
+  if(m<65.5){ks=.7;return vec3(.35,.62,.78);}if(m<66.5){em=1.;return vec3(1.,.95,.8);}
+  return vec3(1,0,1);}
+`;
+make3d(SCENE_GLSL);
+</script></body></html>

@@ -1,0 +1,63 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:transparent}canvas{display:block}</style></head><body><canvas id="c" width="300" height="500"></canvas>
+<script src="lib3d.js"></script><script>
+// Ferro-velho: muro de tijolo, galpão de zinco aberto, montes de sucata, bancada com a peça.
+// sunset=0 dia; sunset=1 fim de tarde azulado com lâmpada acesa. layer 1 cenário; 2 primeiro plano; 6 = brilho azul da peça (só a peça)
+const SCENE_GLSL=`
+float pile(vec3 p,vec3 c,float s,float seed){vec3 q=p-c;float bd=length(q*vec3(1.,1.6,1.))-1.6*s;if(bd>.6)return bd;
+  float d=sdEll(q,vec3(0),vec3(1.4,.75,1.1)*s)+.12*s*vn(q.xz*3.+seed);
+  for(int i=0;i<7;i++){float fi=float(i)+seed;vec3 o=vec3(hash(vec2(fi,1.))-.5,hash(vec2(fi,2.))*.6,hash(vec2(fi,3.))-.5)*vec3(2.,1.,1.6)*s;
+    vec3 k=q-o;k.xy*=rot(hash(vec2(fi,4.))*3.);k.xz*=rot(hash(vec2(fi,5.))*3.);
+    float e=i%3==0?sdCyl(k,vec3(0),.35*s,.18*s):(i%3==1?sdRBox(k,vec3(0),vec3(.45,.08,.3)*s,.02):sdTorY(k,vec3(0),vec2(.3,.1)*s));d=min(d,e);}
+  return d;}
+vec2 scene(vec3 p){
+  vec2 r=vec2(1e3,0.);
+  if(layer>5.5){vec3 q=p-vec3(1.8,1.02,3.2);return vec2(sdSph(q,vec3(0),.09),80.);}
+  if(layer>1.5){r=U(r,vec2(pile(p,vec3(-2.6,0.,-4.2),.8,9.),12.));r=U(r,vec2(sdTorZ(p,vec3(2.6,.35,-4.4),vec2(.42,.2)),14.));return r;}
+  {vec3 q=p-vec3(2.2,0,4.);vec2 b=vec2(sdRBox(q,vec3(-.4,.9,-.8),vec3(1.3,.05,.45),.01),6.);
+   b=U(b,vec2(sdRBox(q,vec3(-1.5,.45,-.8),vec3(.05,.45,.4),.0),6.));b=U(b,vec2(sdRBox(q,vec3(.7,.45,-.8),vec3(.05,.45,.4),.0),6.));
+   b=U(b,vec2(sdCyl(q.yxz,vec3(1.02,-.4,-.8),.28,.17),7.));b=U(b,vec2(sdRBox(q,vec3(-.95,1.03,-.75),vec3(.12,.08,.1),.02),7.));
+   if(layer<.5)return b; r=U(r,b);}
+  if(!INSH)r=U(r,vec2(p.y,1.));
+  // muro de tijolo ao fundo
+  r=U(r,vec2(sdRBox(p,vec3(0,1.4,8.),vec3(30.,1.4,.15),.0),2.));
+  // galpão aberto (direita)
+  {vec3 q=p-vec3(2.2,0,4.);float bd=sdRBox(q,vec3(0,1.8,0),vec3(3.4,2.,2.4),.0);
+   if(bd<.6){
+    for(int i=0;i<4;i++){float x=i<2?-3.:3.;float z=i%2==0?-2.:2.;r=U(r,vec2(sdRBox(q,vec3(x,1.5,z),vec3(.07,1.5,.07),.0),5.));}
+    vec3 k=q;k.yz*=rot(-.12);r=U(r,vec2(sdRBox(k,vec3(0,3.15,.35),vec3(3.3,.04,2.45),.0),4.)); // telhado de zinco
+    r=U(r,vec2(sdRBox(q,vec3(0,1.5,2.05),vec3(3.,1.5,.05),.0),4.)); // parede fundo
+    // lâmpada pendurada
+    r=U(r,vec2(sdCap(q,vec3(-.4,3.,-.6),vec3(-.4,2.4,-.6),.01),5.));r=U(r,vec2(sdSph(q,vec3(-.4,2.3,-.6),.09),9.));
+    // ferramentas na parede
+    for(int i=0;i<5;i++){r=U(r,vec2(sdRBox(q,vec3(-2.+float(i)*.5,1.7,1.98),vec3(.04,.3,.04),.0),6.));}
+   } else r=U(r,vec2(bd,5.));}
+  // montes de sucata (esquerda)
+  r=U(r,vec2(pile(p,vec3(-3.6,0.,2.2),1.2,1.),12.));r=U(r,vec2(pile(p,vec3(-6.6,0.,6.),1.6,4.),13.));r=U(r,vec2(pile(p,vec3(-1.8,0.,6.4),.9,7.),12.));
+  // pneus empilhados
+  for(int i=0;i<4;i++){r=U(r,vec2(sdTorY(p,vec3(-.9,.18+float(i)*.32,2.6),vec2(.45,.17)),14.));}
+  // tambores
+  r=U(r,vec2(sdCyl(p,vec3(6.4,.5,3.),.5,.33),15.));r=U(r,vec2(sdCyl(p,vec3(7.1,.5,3.5),.5,.33),16.));
+  // carcaça de carro velho
+  {vec3 q=p-vec3(-8.5,0,2.2);r=U(r,vec2(max(sdEll(q,vec3(0,.7,0),vec3(1.9,.6,.85)),.25-q.y),17.));}
+  // portão e placa (esquerda frente)
+  r=U(r,vec2(sdRBox(p,vec3(2.0,3.85,1.45),vec3(1.9,.42,.05),.02),18.));r=U(r,vec2(sdRBox(p,vec3(.6,3.3,1.5),vec3(.04,.3,.04),.0),5.));r=U(r,vec2(sdRBox(p,vec3(3.4,3.3,1.5),vec3(.04,.3,.04),.0),5.));
+  return r;}
+bool groundOK(vec3 p){return layer>.5&&layer<1.5;}
+float groundMat(vec3 p){return 1.;}
+vec3 SKY(vec3 rd){vec3 top=mix(vec3(.38,.6,.88),vec3(.2,.28,.55),sunset),hor=mix(vec3(.95,.88,.74),vec3(.95,.62,.5),sunset);float y=clamp(rd.y*2.2,0.,1.);vec3 c=mix(hor,top,pow(y,.7));
+  if(rd.y>0.){vec2 q=rd.xz/(rd.y+.15)*1.2;float cl=smoothstep(.55,.85,vn(q*1.3)*.6+vn(q*3.1)*.4);c=mix(c,mix(vec3(1.,.98,.95),vec3(.85,.6,.6),sunset),cl*.5*smoothstep(0.,.25,rd.y));}return c;}
+vec3 mcol(float m,vec3 p,vec3 n,inout float ks,inout float em){
+  if(m<1.5)return mix(vec3(.62,.5,.38),vec3(.5,.42,.32),vn(p.xz*1.5))*(.9+.1*vn(p.xz*12.));
+  if(m<2.5){vec2 b=vec2(p.x*2.+.5*floor(p.y*5.),p.y*5.);float mo=step(.08,fract(b.x))*step(.1,fract(b.y));return mix(vec3(.7,.66,.6),vec3(.66,.33,.22)*(.85+.3*hash(floor(b))),mo);}
+  if(m<4.5){ks=.5;return vec3(.62,.65,.66)*(.85+.15*step(.5,fract(p.x*5.)))*(.85+.2*vn(p.xz*2.));}
+  if(m<5.5)return vec3(.45,.35,.25);if(m<6.5)return vec3(.5,.36,.22)*(.9+.1*vn(p.xz*20.));
+  if(m<7.5){ks=.7;return vec3(.55,.58,.62);}
+  if(m<9.5){em=sunset>.5?1.:0.;return sunset>.5?vec3(1.4,1.1,.7):vec3(.9);}
+  if(m<13.5){float h=vn(p.xy*3.+p.z);vec3 c=mix(vec3(.55,.35,.22),vec3(.42,.44,.46),h);ks=.4;return c*(.75+.4*vn(p.xz*9.+p.y*4.));}
+  if(m<14.5)return vec3(.08,.08,.09);if(m<15.5){ks=.4;return vec3(.2,.45,.7);}if(m<16.5){ks=.4;return vec3(.8,.35,.15);}
+  if(m<17.5){ks=.3;return vec3(.55,.3,.2)*(.7+.5*vn(p.xy*4.));}if(m<18.5)return vec3(.96,.92,.8);
+  if(m>79.)  {em=1.;return vec3(.6,1.3,2.2);}
+  return vec3(1,0,1);}
+`;
+make3d(SCENE_GLSL);
+</script></body></html>

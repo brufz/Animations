@@ -1,0 +1,52 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:transparent}canvas{display:block}</style></head><body><canvas id="c" width="300" height="500"></canvas>
+<script src="lib3d.js"></script><script>
+// Depósito de rejeitos (Abadia de Goiás): morro gramado com laterais de concreto, tonéis amarelos com o símbolo de radiação, cerca.
+// layer 1 = cenário; layer 2 = cerca em primeiro plano
+const SCENE_GLSL=`
+float trefoil(vec2 uv){float r=length(uv),a=atan(uv.y,uv.x);float bl=step(.04,r)*step(r,.13)*step(.5,cos(3.*a+1.5708));return max(bl,step(r,.028));}
+vec2 drum(vec3 p,vec3 c){return vec2(sdCyl(p,c+vec3(0,.45,0),.45,.3)-.01,10.);}
+vec2 scene(vec3 p){
+  vec2 r=vec2(1e3,0.);
+  if(layer>1.5){ // cerca
+    float d=1e3;for(int i=-6;i<7;i++){d=min(d,sdCyl(p,vec3(float(i)*1.6,1.,-3.2),1.,.04));}
+    vec3 q=p-vec3(0,1.,-3.2);float mesh=max(abs(q.z)-.008,abs(q.y)-.95);float g=abs(fract((q.x+q.y)*4.)-.5)*.25;float g2=abs(fract((q.x-q.y)*4.)-.5)*.25;
+    mesh=max(mesh,min(g,g2)-.012);d=min(d,mesh);r=U(r,vec2(d,30.));return r;}
+  if(!INSH)r=U(r,vec2(p.y,1.));
+  // o morro do depósito
+  {vec3 q=p-vec3(2.,0,16.);float m=sdRBox(q,vec3(0,1.,0),vec3(9.,1.,5.),.0);
+   float sl=max(m,dot(vec2(abs(q.x)-6.5,q.y-2.),normalize(vec2(1.,1.4))));sl=smin(sl,sdEll(q,vec3(0,1.6,0),vec3(7.5,1.2,4.)),1.);
+   r=U(r,vec2(sl,2.));
+   r=U(r,vec2(sdRBox(q,vec3(0,.6,-4.6),vec3(7.,.6,.15),.02),3.));}
+  // galpão/portaria
+  r=U(r,vec2(sdRBox(p,vec3(-7.,1.2,9.),vec3(2.,1.2,1.6),.03),4.));r=U(r,vec2(sdRBox(p,vec3(-7.,2.5,9.),vec3(2.2,.1,1.8),.02),5.));
+  // placa
+  r=U(r,vec2(sdRBox(p,vec3(-3.2,2.,4.),vec3(1.1,.55,.05),.02),6.));r=U(r,vec2(sdCyl(p,vec3(-3.2,.75,4.05),.75,.04),7.));
+  // tonéis e caixas de concreto (perto, para o gancho das 6 mil toneladas)
+  {float bd=sdRBox(p,vec3(1.,1.,2.5),vec3(4.5,1.3,2.5),.0);
+   if(bd<.5){
+    for(int i=0;i<6;i++){for(int j=0;j<2;j++){r=U(r,drum(p,vec3(-2.5+float(i)*.66+float(j)*.33,float(j)*.92,1.2+float(j)*.05)));}}
+    for(int i=0;i<5;i++){r=U(r,drum(p,vec3(-2.3+float(i)*.66,0.,2.)));}
+    for(int i=0;i<3;i++){r=U(r,vec2(sdRBox(p,vec3(2.3+float(i)*1.3,.55,2.2),vec3(.6,.55,.6),.03),11.));}
+    r=U(r,vec2(sdRBox(p,vec3(3.6,1.65,2.2),vec3(.6,.55,.6),.03),11.));
+   } else r=U(r,vec2(bd,10.));}
+  // árvores ao longe (cerrado)
+  {float c=floor((p.x+50.)/7.);vec3 q=p-vec3(c*7.-50.+2.*hash(vec2(c,1.)),0,26.+3.*hash(vec2(c,2.)));
+   r=U(r,vec2(sdCap(q,vec3(0),vec3(.3,1.8,0),.12),8.));r=U(r,vec2(sdEll(q,vec3(.3,2.4,0),vec3(1.4,.8,1.2))+.2*vn(q.xz*2.),9.));}
+  return r;}
+bool groundOK(vec3 p){return layer>.5&&layer<1.5;}
+float groundMat(vec3 p){return 1.;}
+vec3 SKY(vec3 rd){vec3 top=mix(vec3(.38,.6,.88),vec3(.32,.36,.62),sunset),hor=mix(vec3(.95,.88,.74),vec3(1.,.66,.45),sunset);float y=clamp(rd.y*2.2,0.,1.);vec3 c=mix(hor,top,pow(y,.7));
+  if(rd.y>0.){vec2 q=rd.xz/(rd.y+.15)*1.2;float cl=smoothstep(.55,.85,vn(q*1.3)*.6+vn(q*3.1)*.4);c=mix(c,mix(vec3(1.,.98,.95),vec3(1.,.75,.6),sunset),cl*.5*smoothstep(0.,.25,rd.y));}return c;}
+vec3 mcol(float m,vec3 p,vec3 n,inout float ks,inout float em){
+  if(m<1.5)return mix(vec3(.5,.6,.3),vec3(.66,.62,.38),vn(p.xz*.5))*(.88+.15*vn(p.xz*6.));
+  if(m<2.5)return mix(vec3(.38,.58,.28),vec3(.5,.66,.32),vn(p.xz*1.3))*(.9+.12*vn(p.xz*9.));
+  if(m<3.5)return vec3(.75,.74,.7)*(.9+.1*vn(p.xy*4.));if(m<4.5)return vec3(.95,.95,.92);if(m<5.5)return vec3(.2,.45,.4);
+  if(m<6.5)return vec3(.97,.97,.95);if(m<7.5)return vec3(.5);if(m<8.5)return vec3(.4,.3,.2);if(m<9.5)return mix(vec3(.3,.45,.2),vec3(.45,.55,.25),vn(p.xy*3.));
+  if(m<10.5){ks=.5;vec3 c=vec3(.98,.76,.1);if(n.z<-.4){vec2 uv=vec2(p.x-(floor((p.x+.33)/.66)*.66),p.y-(p.y>.92?1.37:.45));float tf=trefoil(uv*.9);c=mix(c,vec3(.08),tf);}
+    float rib=smoothstep(.0,.02,abs(fract(p.y*3.3)-.5)-.45);return c*(1.-.25*rib);}
+  if(m<11.5)return vec3(.78,.77,.73)*(.9+.1*vn(p.xy*5.));
+  if(m<30.5){ks=.5;return vec3(.65,.66,.68);}
+  return vec3(1,0,1);}
+`;
+make3d(SCENE_GLSL);
+</script></body></html>

@@ -1,0 +1,31 @@
+<!DOCTYPE html><html><head><meta charset="utf-8"><style>html,body{margin:0;background:transparent}canvas{display:block}</style></head><body><canvas id="c" width="300" height="500"></canvas>
+<script src="lib3d.js"></script><script>
+// Close da cápsula de césio aberta com o pó azul sobre a bancada (escala ampliada). layer 1 bancada+fundo; layer 6 = pó azul (emissivo)
+const SCENE_GLSL=`
+vec2 scene(vec3 p){
+  vec2 r=vec2(1e3,0.);
+  if(layer>5.5){float d=sdEll(p,vec3(.55,0.,-.15),vec3(.38,.07,.3))+.02*vn(p.xz*30.);d=max(d,-p.y);
+    for(int i=0;i<14;i++){float fi=float(i);vec3 c=vec3(.2+.9*hash(vec2(fi,1.)),.0,-.6+.8*hash(vec2(fi,2.)));d=min(d,sdSph(p,c,.015+.015*hash(vec2(fi,3.))));}
+    return vec2(d,80.);}
+  if(!INSH)r=U(r,vec2(p.y,1.));
+  r=U(r,vec2(6.-p.z,2.));
+  // cápsula de aço deitada (abertura virada pra câmera/direita)
+  vec3 q=p-vec3(-.45,.32,.1);q.xz*=rot(.5);
+  float cap=sdCyl(q.yxz,vec3(0),.55,.32);cap=max(cap,-sdCyl(q.yxz,vec3(0,.5,0),.2,.22));
+  r=U(r,vec2(cap,3.));r=U(r,vec2(sdCyl(q.yxz,vec3(0,.28,0),.02,.21),6.));r=U(r,vec2(sdTorZ(q.zyx,vec3(0,0,.55),vec2(.3,.03)),4.));
+  // pedaços de chumbo quebrados
+  for(int i=0;i<4;i++){float fi=float(i);vec3 k=p-vec3(-1.3+fi*.35,.07,-.7+.4*hash(vec2(fi,1.)));k.xz*=rot(fi*1.7);r=U(r,vec2(sdRBox(k,vec3(0),vec3(.16,.06,.1),.03),5.));}
+  return r;}
+bool groundOK(vec3 p){return false;}
+float groundMat(vec3 p){return 1.;}
+vec3 SKY(vec3 rd){return vec3(.5,.55,.6);}
+vec3 mcol(float m,vec3 p,vec3 n,inout float ks,inout float em){
+  if(m<1.5)return mix(vec3(.55,.52,.48),vec3(.42,.4,.38),vn(p.xz*2.))*(.85+.2*vn(p.xz*14.));
+  if(m<2.5)return mix(vec3(.62,.7,.74),vec3(.5,.58,.64),p.y*.2);
+  if(m<3.5){ks=.9;return vec3(.68,.7,.74)*(.9+.1*vn(p.xy*20.));}if(m<4.5){ks=.9;return vec3(.55,.57,.6);}
+  if(m<5.5){ks=.3;return vec3(.42,.43,.47);}if(m<6.5){em=1.;return vec3(.4,.9,1.7);}
+  if(m>79.){em=1.;float s=step(.92,hash(floor(p.xz*80.)));return vec3(.35,.85,1.6)+vec3(.8,.9,1.)*s;}
+  return vec3(1,0,1);}
+`;
+make3d(SCENE_GLSL);
+</script></body></html>
